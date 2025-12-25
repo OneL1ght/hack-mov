@@ -49,10 +49,8 @@ func main() {
 
         size := chopFourCC(&content)
         binary.Read(bytes.NewReader(size), binary.BigEndian, &sizeU32)
-        fmt.Printf("Current size: %v, %#x, %d\n", size, size, sizeU32)
-
         atype := chopFourCC(&content)
-        fmt.Printf("Current type: %v, %#x, |%s|\n", atype, atype, atype)
+		fmt.Printf("Atom size: %d, type: %s\n", sizeU32, atype)
 
 		_ = chopBytes(&content, uint(sizeU32) - 8)
     }
