@@ -1,14 +1,12 @@
 package main
 
 import (
-	// "encoding/binary"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	_ "unicode"
 	_ "unicode/utf8"
 
-	// "io"
 	"os"
 )
 
@@ -44,42 +42,18 @@ func main() {
         panic(err)
     }
 
-    fmt.Printf("File content length: %v\n", len(content))
+    fmt.Printf("Total bytes count: %v\n", len(content))
 
-    _ = chopBytes(&content, 10); // skip reserver 10 bytes
-    lockCount := chopBytes(&content, 2);
-    var lcU32 uint32
-    binary.Read(bytes.NewReader(lockCount), binary.LittleEndian, &lcU32)
-    fmt.Printf("lockCount: %v, %#x, |%s|, %d\n", lockCount, lockCount, lockCount, lcU32)
-    
-    ahSize := chopFourCC(&content)
-    var u32 uint32
-    binary.Read(bytes.NewReader(ahSize), binary.LittleEndian, &u32)
-    fmt.Printf("Current ahSize: %v, %#x, |%s|, %d\n", ahSize, ahSize, ahSize, u32)
+    for len(content) > 0 {
+        var sizeU32 uint32
 
-    t := chopFourCC(&content)
-    fmt.Printf("type: %v, |%s|\n", t, t)
+        size := chopFourCC(&content)
+        binary.Read(bytes.NewReader(size), binary.BigEndian, &sizeU32)
+        fmt.Printf("Current size: %v, %#x, %d\n", size, size, sizeU32)
 
-    id := chopUint32(&content, binary.LittleEndian)
-    fmt.Printf("atom id: %v, |%s|\n", id, id)
-    
-    childCount := chopBytes(&content, 2)
-    var u16 uint16
-    binary.Read(bytes.NewReader(childCount), binary.LittleEndian, &u16)
-    fmt.Printf("child count: %v, |%d|\n", childCount, u16)
+        atype := chopFourCC(&content)
+        fmt.Printf("Current type: %v, %#x, |%s|\n", atype, atype, atype)
 
-    _ = chopBytes(&content, 4) // skip reserved
-    
-    next := chopFourCC(&content)
-    fmt.Printf("next fourcc: %v, |%s|\n", next, next)
-    
-    return
-    // for range 12 {
-    //     fourcc := chopFourCC(&content)
-    //     var u32 uint32
-    //     binary.Read(bytes.NewReader(fourcc), binary.LittleEndian, &u32)
-    //     fmt.Printf("Current fourcc: %v, %#x, |%s|, %d\n", fourcc, fourcc, fourcc, u32)
-    //     // fmt.Printf("File content length: %v\n", len(content))
-    //     if string(fourcc) == "moov" { break }
-    // }
+		_ = chopBytes(&content, uint(sizeU32) - 8)
+    }
 }
