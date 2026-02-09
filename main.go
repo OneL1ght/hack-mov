@@ -74,6 +74,14 @@ func getFtyp(atomData []byte) (Ftyp, error) {
 	return ftyp, nil
 }
 
+func getStruct[T any](atomData []byte, res *T) (error) {
+	err := binary.Read(bytes.NewReader(atomData), binary.BigEndian, res)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func getMdat(data []byte) (Mdat, error) {
 	const aHeaderFieldsSize = 16
 
@@ -117,26 +125,32 @@ func printWithIndent(txt string, indent int) {
 	fmt.Printf("%s%s\n", spaces, txt)
 }
 
+func readAtomHeader(content []byte) AtomHeader {
+	var size uint32
+	defaultSizeBytes := copyBytes(&content, 4)
+	binary.Read(bytes.NewReader(defaultSizeBytes), binary.BigEndian, &size)
+	withoutSize := content[4:]
+	atype := copyBytes(&withoutSize, 4)
+	return AtomHeader{size, [4]byte(atype)}
+}
+
 func printAtoms(content []byte, indent int) {
     for len(content) >= minAtomSize {
 		var skipSize uint64
-		var size uint32
-        defaultSizeBytes := copyBytes(&content, 4)
-        binary.Read(bytes.NewReader(defaultSizeBytes), binary.BigEndian, &size)
-		skipSize = uint64(size)
+		atomHeader := readAtomHeader(content)
+		skipSize = uint64(atomHeader.Size)
 
-		withoutSize := content[4:]
-		atype := copyBytes(&withoutSize, 4)
-
-		printWithIndent(fmt.Sprintf("Atom %s size: %d", atype, size), indent)
+		printWithIndent(fmt.Sprintf("Atom %s size: %d", atomHeader.Type, atomHeader.Size), indent)
 
 		indent += 2
-		switch strAType := string(atype); strAType {
+		switch strAtomType := string(atomHeader.Type[:]); strAtomType {
 		case "ftyp":
 			ftyp, err := getFtyp(content[:skipSize])
 			if err != nil { panic(err) }
 			printWithIndent(
-				fmt.Sprintf("type: %s, mb: %s, cmb: %s, mv: %d", ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion),
+				fmt.Sprintf(
+					"type: %s, mb: %s, cmb: %s, mv: %d",
+					ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion),
 				indent)
 		case "mdat":
 			mdat, err := getMdat(content)
@@ -144,11 +158,25 @@ func printAtoms(content []byte, indent int) {
 				panic(err)
 			}
 			mdatTxt := fmt.Sprintf(
-				"mdat s: %d, es: %v, ds: %d", mdat.Size, mdat.ExtendedSize, len(mdat.Data))
+				"s: %d, es: %v, ds: %d", mdat.Size, mdat.ExtendedSize, len(mdat.Data))
 			printWithIndent(mdatTxt, indent)
 			if skipSize == 1 {
 				skipSize = uint64(mdat.ExtendedSize)
 			}
+		case "moov":
+			printAtoms(content[8:], indent + 2)
+		case "mvhd":
+			var mvhd MovieHeaderAtom
+			err := getStruct(content[:atomHeader.Size], &mvhd)
+			if err != nil { panic(err) }
+			ts := mvhd.TimeScale
+			if ts == 0 {
+				ts = 1
+			}
+			durationSec := float32(mvhd.Duration) / float32(ts)
+			printWithIndent(
+				fmt.Sprintf("duration: %fs, timeScale: %d", durationSec, mvhd.TimeScale),
+				indent)
 		}
 		indent -= 2
 
