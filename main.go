@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"errors"
 	_ "unicode"
@@ -39,6 +39,9 @@ func copyBytes(content *[]byte, amount uint32) []byte {
 }
 
 func chopBytes(content *[]byte, amount uint64) []byte {
+	if amount > uint64(len((*content))) {
+		panic("trying chop too many bytes, out of range!")
+	}
     val := (*content)[0:amount]
     (*content) = (*content)[amount:]
     return val
@@ -48,8 +51,7 @@ func chopFourCC(content *[]byte) []byte {
     if len(*content) < 4 {
         panic("cannot chop fourCC from content of smaller length!")
     }
-    fourcc := chopBytes(content, 4)
-    return []byte(fourcc)
+    return chopBytes(content, 4)
 }
 
 func chopUint32(content *[]byte, order binary.ByteOrder) uint32 {
@@ -110,14 +112,12 @@ func getMdat(data []byte) (Mdat, error) {
 	return mdat, nil
 }
 
-func main() {
-    path := "manul.mov"
-    content, err := os.ReadFile(path)
-    if err != nil {
-        panic(err)
-    }
+func printWithIndent(txt string, indent int) {
+	spaces := strings.Repeat(" ", indent)
+	fmt.Printf("%s%s\n", spaces, txt)
+}
 
-    fmt.Printf("Total bytes count: %v\n", len(content))
+func printAtoms(content []byte, indent int) {
     for len(content) >= minAtomSize {
 		var skipSize uint64
 		var size uint32
@@ -127,25 +127,42 @@ func main() {
 
 		withoutSize := content[4:]
 		atype := copyBytes(&withoutSize, 4)
-		fmt.Printf("Atom size: %d, type: %s\n", size, atype)
 
-		strAType := string(atype)
-		if strAType == "ftyp" { // || strAType == "wide" 
+		printWithIndent(fmt.Sprintf("Atom %s size: %d", atype, size), indent)
+
+		indent += 2
+		switch strAType := string(atype); strAType {
+		case "ftyp":
 			ftyp, err := getFtyp(content[:skipSize])
 			if err != nil { panic(err) }
-			ftypJson, err := json.MarshalIndent(ftyp, "", "  ")
-			fmt.Printf("  ftyp: %v\n", string(ftypJson))
-		} else if strAType == "mdat" {
+			printWithIndent(
+				fmt.Sprintf("type: %s, mb: %s, cmb: %s, mv: %d", ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion),
+				indent)
+		case "mdat":
 			mdat, err := getMdat(content)
 			if err != nil {
 				panic(err)
 			}
-			fmt.Printf("  mdat s: %v, t: %s, es: %v, len d: %v\n", mdat.Size, mdat.Type, mdat.ExtendedSize, len(mdat.Data))
+			mdatTxt := fmt.Sprintf(
+				"mdat s: %d, es: %v, ds: %d", mdat.Size, mdat.ExtendedSize, len(mdat.Data))
+			printWithIndent(mdatTxt, indent)
 			if skipSize == 1 {
 				skipSize = uint64(mdat.ExtendedSize)
 			}
 		}
+		indent -= 2
 
 		_ = chopBytes(&content, skipSize)
     }
+}
+
+func main() {
+    path := "manul.mov"
+    content, err := os.ReadFile(path)
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Printf("Total bytes count: %v\n", len(content))
+	printAtoms(content, 0)
 }
