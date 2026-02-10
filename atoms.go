@@ -5,7 +5,7 @@ type Atom interface {}
 // Базовый заголовок любого атома (8 байт)
 type AtomHeader struct {
 	Size uint32   // Размер всего атома в байтах (включая заголовок)
-	Type [4]byte  // Тип атома в ASCII ('moov', 'mvhd', 'trak' и т.д.)
+	Type uint32   // Тип атома в ASCII ('moov', 'mvhd', 'trak' и т.д.)
 }
 
 // FullBox - расширенный формат атома (начинается с version + flags)
