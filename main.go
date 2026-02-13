@@ -20,6 +20,9 @@ const mdatHex = 0x6d646174
 const moovHex = 0x6d6f6f76
 const mvhdHex = 0x6d766864
 const trakHex = 0x7472616b
+const tkhdHex = 0x746b6864
+const edtsHex = 0x65647473
+const mdiaHex = 0x6d646961
 const udtaHex = 0x75647461
 const _swrHex = 0xa9737772
 
@@ -144,7 +147,9 @@ func readAtomHeader(content []byte) AtomHeader {
 }
 
 func printAtoms(content []byte, indent int) {
-    for len(content) >= minAtomSize {
+	dopInfoIndent   := indent + 1
+	nextLevelIndent := indent + 4
+    if len(content) >= minAtomSize {
 		var skipSize uint64
 		atomHeader := readAtomHeader(content)
 		skipSize = uint64(atomHeader.Size)
@@ -156,16 +161,15 @@ func printAtoms(content []byte, indent int) {
 			fmt.Sprintf("Atom %s |%#x| size: %d",
 			typeSymbs, atomHeader.Type, atomHeader.Size), indent)
 
-		indent += 2
 		switch atomHeader.Type {
 		case ftypHex:
 			ftyp, err := getFtyp(content[:skipSize])
-			if err != nil { panic(err) }
-			printWithIndent(
-				fmt.Sprintf(
-					"type: %s, mb: %s, cmb: %s, mv: %d",
-					ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion),
-				indent)
+			if err != nil {
+				panic(err)
+			}
+			ftypTxt := fmt.Sprintf("type: %s, mb: %s, cmb: %s, mv: %d",
+				ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion)
+			printWithIndent(ftypTxt, dopInfoIndent)
 		case mdatHex:
 			mdat, err := getMdat(content)
 			if err != nil {
@@ -173,12 +177,10 @@ func printAtoms(content []byte, indent int) {
 			}
 			mdatTxt := fmt.Sprintf(
 				"s: %d, es: %v, ds: %d", mdat.Size, mdat.ExtendedSize, len(mdat.Data))
-			printWithIndent(mdatTxt, indent)
+			printWithIndent(mdatTxt, dopInfoIndent)
 			if skipSize == 1 {
 				skipSize = uint64(mdat.ExtendedSize)
 			}
-		case moovHex:
-			printAtoms(content[8:], indent)
 		case mvhdHex:
 			var mvhd MovieHeaderAtom
 			err := getStruct(content[:atomHeader.Size], &mvhd)
@@ -193,22 +195,18 @@ func printAtoms(content []byte, indent int) {
 			// TODO: get the matrix
 			printWithIndent(
 				fmt.Sprintf("duration: %fs, timeScale: %d", durationSec, mvhd.TimeScale),
-				indent)
-		case udtaHex:
-			// printWithIndent(fmt.Sprintf("type values: %#x", content[12:16]), indent)
-			printAtoms(content[8:], indent)
+				dopInfoIndent)
 		case _swrHex:
-			sgi := content[8:atomHeader.Size]
+			sgi := content[8:skipSize]
 			sgiTxt := string(sgi)
 			sgiTxt = strings.ReplaceAll(sgiTxt, "\n", "")
 			sgiTxt = strings.ReplaceAll(sgiTxt, "\r", "")
-			printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), indent)
-		case trakHex:
-			printWithIndent("TODO", indent)
+			printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), dopInfoIndent)
+		case moovHex, udtaHex, trakHex, mdiaHex: // atoms contains children
+			printAtoms(content[8:skipSize], nextLevelIndent)
 		}
-		indent -= 2
 
-		_ = chopBytes(&content, skipSize)
+		printAtoms(content[skipSize:], indent)
     }
 }
 
