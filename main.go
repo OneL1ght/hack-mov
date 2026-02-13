@@ -211,7 +211,11 @@ func printAtoms(content []byte, indent int) {
 }
 
 func main() {
-    path := "manul.mov"
+	args := os.Args
+	if len(args) < 2 {
+		panic("please provide video file path as an argument!")
+	}
+    path := os.Args[1]
     content, err := os.ReadFile(path)
     if err != nil {
         panic(err)
