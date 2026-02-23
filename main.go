@@ -2,12 +2,10 @@ package main
 
 import (
 	"bytes"
-	"strings"
 	"encoding/binary"
-	"fmt"
 	"errors"
-	_ "unicode"
-	_ "unicode/utf8"
+	"fmt"
+	"strings"
 
 	"os"
 )
@@ -25,6 +23,10 @@ const edtsHex = 0x65647473
 const mdiaHex = 0x6d646961
 const udtaHex = 0x75647461
 const _swrHex = 0xa9737772
+const minfHex = 0x6d696e66
+const stblHex = 0x7374626c
+const stsdHex = 0x73747364
+const stcoHex = 0x7374636f
 
 type fourCC = [fccSize]byte
 
@@ -194,7 +196,7 @@ func printAtoms(content []byte, indent int) {
 			durationSec := float32(mvhd.Duration) / float32(ts)
 			// TODO: get the matrix
 			printWithIndent(
-				fmt.Sprintf("duration: %fs, timeScale: %d", durationSec, mvhd.TimeScale),
+				fmt.Sprintf("duration: %fs, timeScale: %d, matrix: %v", durationSec, mvhd.TimeScale, mvhd.Matrix),
 				dopInfoIndent)
 		case _swrHex:
 			sgi := content[8:skipSize]
@@ -202,7 +204,21 @@ func printAtoms(content []byte, indent int) {
 			sgiTxt = strings.ReplaceAll(sgiTxt, "\n", "")
 			sgiTxt = strings.ReplaceAll(sgiTxt, "\r", "")
 			printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), dopInfoIndent)
-		case moovHex, udtaHex, trakHex, mdiaHex: // atoms contains children
+		case stsdHex:
+			version := content[8:9]
+			flags := content[9:12]
+			var noe int32
+			binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
+			printWithIndent(fmt.Sprintf("v: %d, flags: %v, noe: %d", version, flags, noe), dopInfoIndent)
+			printAtoms(content[16:atomHeader.Size], nextLevelIndent)
+		case stcoHex:
+			version := content[8:9]
+			flags := content[9:12]
+			var noe int32
+			binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
+			cot := content[16:atomHeader.Size]
+			printWithIndent(fmt.Sprintf("v: %d, flags: %v, noe: %v cot: %v", version, flags, noe, cot), dopInfoIndent)
+		case moovHex, udtaHex, trakHex, mdiaHex, minfHex, stblHex: // atoms contains children
 			printAtoms(content[8:skipSize], nextLevelIndent)
 		}
 
