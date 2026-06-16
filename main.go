@@ -205,8 +205,10 @@ func printAtoms(content []byte, indent int) {
 			sgiTxt = strings.ReplaceAll(sgiTxt, "\r", "")
 			printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), dopInfoIndent)
 		case stsdHex:
-			version := content[8:9]
-			flags := content[9:12]
+			var dri int16
+			binary.Read(bytes.NewReader(content[14:16]), binary.BigEndian, &dri)
+			printWithIndent(fmt.Sprintf("Data ref idx: %v", dri), dopInfoIndent)
+			printAtoms(content[16:atomHeader.Size], nextLevelIndent)
 			var noe int32
 			binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
 			printWithIndent(fmt.Sprintf("v: %d, flags: %v, noe: %d", version, flags, noe), dopInfoIndent)
