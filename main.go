@@ -52,33 +52,6 @@ func copyBytes(content *[]byte, amount uint32) []byte {
     return res
 }
 
-func chopBytes(content *[]byte, amount uint64) []byte {
-	if amount > uint64(len((*content))) {
-		panic("trying chop too many bytes, out of range!")
-	}
-    val := (*content)[0:amount]
-    (*content) = (*content)[amount:]
-    return val
-}
-
-func chopFourCC(content *[]byte) []byte {
-    if len(*content) < 4 {
-        panic("cannot chop fourCC from content of smaller length!")
-    }
-    return chopBytes(content, 4)
-}
-
-func chopUint32(content *[]byte, order binary.ByteOrder) uint32 {
-    if len(*content) < 4 {
-        panic("cannot chop fourCC from content of smaller length!")
-    }
-    var u32 uint32
-    data := chopBytes(content, 4)
-    err := binary.Read(bytes.NewReader(data), order, &u32)
-    if err != nil { panic(err) }
-    return u32
-}
-
 func getFtyp(atomData []byte) (Ftyp, error) {
 	var ftyp Ftyp
 	err := binary.Read(bytes.NewReader(atomData), binary.BigEndian, &ftyp)
