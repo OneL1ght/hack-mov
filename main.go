@@ -26,7 +26,8 @@ const _swrHex = 0xa9737772
 const minfHex = 0x6d696e66
 const stblHex = 0x7374626c
 const stsdHex = 0x73747364
-const stcoHex = 0x7374636f
+const stcoHex = 0x7374636f // chunk offsets
+const stscHex = 0x73747363 // sample to chunk
 
 type fourCC = [fccSize]byte
 
@@ -209,11 +210,46 @@ func printAtoms(content []byte, indent int) {
 			binary.Read(bytes.NewReader(content[14:16]), binary.BigEndian, &dri)
 			printWithIndent(fmt.Sprintf("Data ref idx: %v", dri), dopInfoIndent)
 			printAtoms(content[16:atomHeader.Size], nextLevelIndent)
+		case stscHex:
 			var noe int32
 			binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
-			printWithIndent(fmt.Sprintf("v: %d, flags: %v, noe: %d", version, flags, noe), dopInfoIndent)
-			printAtoms(content[16:atomHeader.Size], nextLevelIndent)
+			printWithIndent(fmt.Sprintf("noe: %v", noe), dopInfoIndent)
+
+			var lineSize int32 = 12
+			sample2Chunk := content[16:atomHeader.Size]
+			if int32(len(sample2Chunk)) / lineSize != noe {
+				panic("wrong in parsing stts sample2Chunk table!")
+			}
+			for i := range noe {
+				pos := i * lineSize
+				var firstChunk int32
+				binary.Read(bytes.NewReader(sample2Chunk[pos:pos+4]), binary.BigEndian, &firstChunk)
+				var samplesPerChunk int32
+				binary.Read(bytes.NewReader(sample2Chunk[pos+4:pos+8]), binary.BigEndian, &samplesPerChunk)
+				var id int32
+				binary.Read(bytes.NewReader(sample2Chunk[pos+8:pos+12]), binary.BigEndian, &id)
+				printWithIndent(fmt.Sprintf("first: %v, S/Chunk: %v, SdescID: %v", firstChunk, samplesPerChunk, id), dopInfoIndent)
+			}
 		case stcoHex:
+			version := content[8:9]
+			flags   := content[9:12]
+			var noe int32
+			binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
+			offset2Chunk := content[16:atomHeader.Size]
+			offset2ChunkCount := len(offset2Chunk) / 4
+			printWithIndent(
+				fmt.Sprintf("v: %d, flags: %v, noe: %v, o2chCount: %v", version, flags, noe, offset2ChunkCount),
+				dopInfoIndent)
+
+			var offset2ChunkArr []int32 = make([]int32, offset2ChunkCount)
+			binary.Read(bytes.NewReader(offset2Chunk), binary.BigEndian, &offset2ChunkArr)
+			for i := 0; i < offset2ChunkCount; i += 2 {
+				if i < 1 { continue }
+				printWithIndent(
+					// fmt.Sprintf("offset: %v, chunk: %v", offset2ChunkArr[i], offset2ChunkArr[i+1]),
+					fmt.Sprintf("offset: %v", offset2ChunkArr[i]), dopInfoIndent)
+			}
+
 			version := content[8:9]
 			flags := content[9:12]
 			var noe int32
