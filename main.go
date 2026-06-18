@@ -49,6 +49,12 @@ type Mdat struct {
 	Data         []byte // content
 }
 
+type ImgDims struct {
+	Width  int
+	Height int
+	Chan   int
+}
+
 func copyBytes(content *[]byte, amount uint32) []byte {
     res := make([]byte, amount)
 	copy(res, (*content)[:amount])
@@ -125,14 +131,15 @@ func readAtomHeader(content []byte) AtomHeader {
 	return AtomHeader{size, typeInt}
 }
 
-func writeImg(data []byte, path string) error {
+func writeImg(data []byte, path string, dims ImgDims) error {
+	imgSizeB := dims.Width * dims.Height * dims.Chan
 	if len(data) != imgSizeB {
 		 return errors.New("got data of invalid length!")
 	}
-	img := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{imgWidth, imgHeight}})
-	for r := range imgHeight {
-		for c := range imgWidth {
-			pos := r * imgWidth * 3 + c * 3
+	img := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{dims.Width, dims.Height}})
+	for r := range dims.Height {
+		for c := range dims.Width {
+			pos := r * dims.Width * 3 + c * 3
 			px  := data[pos:pos+3]
 			img.SetRGBA(r, c, color.RGBA{px[0], px[1], px[2], 255})
 		}
