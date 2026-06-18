@@ -250,13 +250,6 @@ func printAtoms(content []byte, indent int) {
 					// fmt.Sprintf("offset: %v, chunk: %v", offset2ChunkArr[i], offset2ChunkArr[i+1]),
 					fmt.Sprintf("offset: %v", offset2ChunkArr[i]), dopInfoIndent)
 			}
-
-			version := content[8:9]
-			flags := content[9:12]
-			var noe int32
-			binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
-			cot := content[16:atomHeader.Size]
-			printWithIndent(fmt.Sprintf("v: %d, flags: %v, noe: %v cot: %v", version, flags, noe, cot), dopInfoIndent)
 		case moovHex, udtaHex, trakHex, mdiaHex, minfHex, stblHex: // atoms contains children
 			printAtoms(content[8:skipSize], nextLevelIndent)
 		}
