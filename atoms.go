@@ -30,3 +30,27 @@ type MovieHeaderAtom struct {
 	CurrentTime       uint32   // 4 байта
 	NextTrackID       uint32   // 4 байта - следующий доступный ID трека
 }
+
+type Ftyp struct {
+	Size             uint32 // A 32-bit integer that specifies the number of bytes in the atom.
+	Type             fourCC // A 32-bit unsigned integer that identifies the atom type, typically represented as a four-character code.
+	MajorBrand       fourCC // A 32-bit unsigned integer that represents a file format code.
+	MinorVersion     uint32 // A 32-bit field that indicates the file format specification version.
+	CompatibleBrands fourCC // A series of unsigned 32-bit integers listing compatible file formats.
+}
+
+type Mdat struct {
+	Size         int32  // A 32-bit integer that specifies the number of bytes in the atom.
+	Type         fourCC // A 32-bit unsigned integer that identifies the atom type, typically represented as a four-character code.
+	ExtendedSize int64  // A 64-bit integer that specifies the number of bytes in this media data atom.
+	Data         []byte // content
+}
+
+type Stco struct {
+	Size         uint32
+	Type         uint32
+	Version      byte
+	Flags        [3]byte
+	NOE          uint32
+	ChunkOffsets []int32
+}
