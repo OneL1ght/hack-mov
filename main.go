@@ -5,6 +5,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"strings"
 
 	"os"
@@ -120,6 +123,24 @@ func readAtomHeader(content []byte) AtomHeader {
 	typeBytes := copyBytes(&withoutSize, 4)
 	binary.Read(bytes.NewReader(typeBytes), binary.BigEndian, &typeInt)
 	return AtomHeader{size, typeInt}
+}
+
+func writeImg(data []byte, path string) error {
+	if len(data) != imgSizeB {
+		 return errors.New("got data of invalid length!")
+	}
+	img := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{imgWidth, imgHeight}})
+	for r := range imgHeight {
+		for c := range imgWidth {
+			pos := r * imgWidth * 3 + c * 3
+			px  := data[pos:pos+3]
+			img.SetRGBA(r, c, color.RGBA{px[0], px[1], px[2], 255})
+		}
+	}
+
+	out, _ := os.Create(path)
+	defer out.Close()
+	return png.Encode(out, img)
 }
 
 func printAtoms(content []byte, indent int) {
