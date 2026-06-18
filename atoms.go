@@ -54,3 +54,18 @@ type Stco struct {
 	NOE          uint32
 	ChunkOffsets []int32
 }
+
+type Stsc struct {
+	Size         uint32
+	Type         uint32
+	Version      byte
+	Flags        [3]byte
+	NOE          uint32
+	Sample2Chunk []SampleChunkRow
+}
+
+type SampleChunkRow struct {
+	First int32
+	SpC   int32 // sample per chunk
+	Id    int32
+}

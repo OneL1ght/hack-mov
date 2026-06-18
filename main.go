@@ -134,6 +134,46 @@ func getStco(data []byte) (*Stco, error) {
 	return res, nil
 }
 
+func getStsc(data []byte) (*Stsc, error) {
+	var res *Stsc
+	header, err := readAtomHeader(data[:8])
+	if err != nil {
+		return res, err
+	} else if uint32(len(data)) < header.Size {
+		return res, fmt.Errorf("invalid length of data, lower than header size")
+	}
+
+	sample2ChunkSize := len(data[16:header.Size]) / 12
+	res = &Stsc{
+		Size: header.Size,
+		Type: header.Type,
+		Version: data[8],
+		Sample2Chunk: make([]SampleChunkRow, sample2ChunkSize),
+	}
+
+	err = binary.Read(bytes.NewReader(data[9:12]), binary.BigEndian, &res.Flags)
+	if err != nil {
+		return res, err
+	}
+
+	err = binary.Read(bytes.NewReader(data[12:16]), binary.BigEndian, &res.NOE)
+	if err != nil {
+		return res, err
+	}
+	if res.NOE != uint32(sample2ChunkSize) {
+		return res, fmt.Errorf(
+			"number of entries not equal calculated sample2chunk table size, noe(%v) != table size(%v)",
+			res.NOE, sample2ChunkSize)
+	}
+
+	err = binary.Read(bytes.NewReader(data[16:header.Size]), binary.BigEndian, &res.Sample2Chunk)
+	if err != nil {
+		return res, err
+	}
+
+	return res, nil
+}
+
 func printWithIndent(txt string, indent int) {
 	spaces := strings.Repeat(" ", indent)
 	fmt.Printf("%s%s\n", spaces, txt)
@@ -238,27 +278,18 @@ func printAtoms(content []byte, indent int) {
 			printWithIndent(fmt.Sprintf("Data ref idx: %v", dri), dopInfoIndent)
 			printAtoms(content[16:atomHeader.Size], nextLevelIndent)
 		case stscHex:
-			var noe int32
-			binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
-			printWithIndent(fmt.Sprintf("noe: %v", noe), dopInfoIndent)
-
-			var lineSize int32 = 12
-			sample2Chunk := content[16:atomHeader.Size]
-			if int32(len(sample2Chunk)) / lineSize != noe {
-				panic("wrong in parsing stts sample2Chunk table!")
+			stsc, err := getStsc(content[:atomHeader.Size])
+			if err != nil {
+				printWithIndent(fmt.Sprintf("%v", err), indent)
+				return
 			}
-			for i := range noe {
-				pos := i * lineSize
-				var firstChunk int32
-				binary.Read(bytes.NewReader(sample2Chunk[pos:pos+4]), binary.BigEndian, &firstChunk)
-				var samplesPerChunk int32
-				binary.Read(bytes.NewReader(sample2Chunk[pos+4:pos+8]), binary.BigEndian, &samplesPerChunk)
-				var id int32
-				binary.Read(bytes.NewReader(sample2Chunk[pos+8:pos+12]), binary.BigEndian, &id)
-				printWithIndent(fmt.Sprintf("first: %v, S/Chunk: %v, SdescID: %v", firstChunk, samplesPerChunk, id), dopInfoIndent)
+			for _, row := range stsc.Sample2Chunk {
+				printWithIndent(
+					fmt.Sprintf("first: %v, S/Chunk: %v, SdescID: %v", row.First, row.SpC, row.Id),
+					dopInfoIndent)
 			}
 		case stcoHex:
-			stco, err := getStco(content)
+			stco, err := getStco(content[:atomHeader.Size])
 			if err != nil {
 				printWithIndent(fmt.Sprintf("%v", err), indent)
 				return
