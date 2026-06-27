@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"strconv"
 	"strings"
+	"path"
 
 	"os"
 )
@@ -41,6 +42,10 @@ type ImgDims struct {
 	Width  int32
 	Height int32
 	Chan   int32
+}
+
+func (d ImgDims) totalValues() int32 {
+	return d.Width * d.Height * d.Chan
 }
 
 func copyBytes(content *[]byte, amount uint32) []byte {
@@ -308,17 +313,120 @@ func printAtoms(content []byte, indent int) {
     }
 }
 
+func findAtomsData(data []byte, t uint32, atom *[][]byte) {
+    if len(data) >= minAtomSize {
+		header, err := readAtomHeader(data)
+		if err != nil {
+			fmt.Println("cannot read atom header")
+			return
+		}
+
+		skipSize := uint64(header.Size)
+		typeInt  := header.Type
+		if typeInt == t {
+			*atom = append(*atom, data[:skipSize])
+		} else {
+			switch header.Type {
+			case stsdHex:
+				findAtomsData(data[16:header.Size], t, atom)
+			case moovHex, udtaHex, trakHex, mdiaHex, minfHex, stblHex: // atoms contains children
+				findAtomsData(data[8:skipSize], t, atom)
+			}
+		}
+
+		findAtomsData(data[skipSize:], t, atom)
+	}
+}
+
+func getUintOfFourCCStr(s string) (uint32, error) {
+	if len(s) != 4 {
+		return 0, fmt.Errorf("fourcc string must be contains 4 sybmols")
+	}
+	b := make([]byte, 0)
+	for _, ch := range s {
+		b = append(b, byte(ch))
+	}
+	var res uint32
+	err := binary.Read(bytes.NewReader(b), binary.BigEndian, &res)
+	if err != nil {
+		return 0, err
+	}
+	return res, nil
+}
+
+func uint32ToString(src uint32) string {
+	tb := make([]byte, 4)
+	binary.BigEndian.PutUint32(tb, src)
+	return string(tb)
+}
+
+func containsAtom(data []byte, atomNum uint32) bool {
+	tmp := make([][]byte, 0)
+	findAtomsData(data, atomNum, &tmp)
+	return len(tmp) != 0
+}
+
+func exportFrames(data []byte, dir string, ) error {
+	if !containsAtom(data, trakHex) {
+		return errors.New("there are no trak atoms in passed data!")
+	}
+
+	var err error
+	traksData := make([][]byte, 0)
+	findAtomsData(data, trakHex, &traksData)
+
+	var videoStco *Stco
+	if len(traksData) != 0 {
+		for _, ad := range traksData {
+			if containsAtom(ad, raw_Hex) {
+				tmp := make([][]byte, 0)
+				findAtomsData(ad, stcoHex, &tmp)
+				if len(tmp) != 1 {
+					return errors.New("got invalid result on stco searchin")
+				}
+				videoStco, err = getStco(tmp[0])
+				if err != nil { return err }
+			}
+		}
+	} else {
+		fmt.Println("atom", uint32ToString(trakHex), "was not found!")
+	}
+
+	if videoStco == nil {
+		return errors.New("video stco was not found!")
+	}
+
+	if err = os.Mkdir(dir, 0755); err != nil && !os.IsExist(err) {
+		return err
+	}
+
+	for i, offset := range videoStco.ChunkOffsets {
+		imgDims := ImgDims{1920, 1080, 3}
+		end := offset + imgDims.totalValues()
+		fmt.Printf("saving frame of offset: %v, end: %v\n", offset, end)
+		imgPath := path.Join(dir, fmt.Sprintf("img%v.png", i))
+		err = writeImg(data[offset:end], imgPath, imgDims)
+		if err != nil {
+			return fmt.Errorf("couldn't save img due to error: %v", err)
+		}
+	}
+	
+	return nil
+}
+
 func main() {
 	args := os.Args
 	if len(args) < 2 {
 		panic("please provide video file path as an argument!")
 	}
-    path := os.Args[1]
-    content, err := os.ReadFile(path)
-    if err != nil {
-        panic(err)
-    }
+	filePath := os.Args[1]
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		panic(err)
+	}
 
-    fmt.Printf("Total bytes count: %v\n", len(content))
-	printAtoms(content, 0)
+	// printAtoms(content, 0)
+
+	imgsDir := "./imgs-" + path.Base(filePath) 
+	exportFrames(content, imgsDir)
 }
