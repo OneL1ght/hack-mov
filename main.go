@@ -17,28 +17,28 @@ import (
 	"os"
 )
 
-var parentsAtoms []uint32 = []uint32{moovHex, udtaHex, trakHex, mdiaHex, minfHex, stblHex}
+var parentsAtoms []uint32 = []uint32{moovNum, udtaNum, trakNum, mdiaNum, minfNum, stblNum}
 
 const fccSize uint = 4
 const minAtomSize int = 8
-const ftypHex uint32 = 0x66747970
-const wideHex uint32 = 0x77696465
-const mdatHex uint32 = 0x6d646174
-const moovHex uint32 = 0x6d6f6f76
-const mvhdHex uint32 = 0x6d766864
-const trakHex uint32 = 0x7472616b
-const tkhdHex uint32 = 0x746b6864
-const edtsHex uint32 = 0x65647473
-const mdiaHex uint32 = 0x6d646961
-const udtaHex uint32 = 0x75647461
-const _swrHex uint32 = 0xa9737772
-const minfHex uint32 = 0x6d696e66
-const stblHex uint32 = 0x7374626c
-const stsdHex uint32 = 0x73747364
-const stcoHex uint32 = 0x7374636f // chunk offsets
-const stscHex uint32 = 0x73747363 // sample to chunk
-const mp4aHex uint32 = 0x6d703461
-const raw_Hex uint32 = 0x72617720
+const ftypNum uint32 = 0x66747970
+const wideNum uint32 = 0x77696465
+const mdatNum uint32 = 0x6d646174
+const moovNum uint32 = 0x6d6f6f76
+const mvhdNum uint32 = 0x6d766864
+const trakNum uint32 = 0x7472616b
+const tkhdNum uint32 = 0x746b6864
+const edtsNum uint32 = 0x65647473
+const mdiaNum uint32 = 0x6d646961
+const udtaNum uint32 = 0x75647461
+const _swrNum uint32 = 0xa9737772
+const minfNum uint32 = 0x6d696e66
+const stblNum uint32 = 0x7374626c
+const stsdNum uint32 = 0x73747364
+const stcoNum uint32 = 0x7374636f // chunk offsets
+const stscNum uint32 = 0x73747363 // sample to chunk
+const mp4aNum uint32 = 0x6d703461
+const raw_Num uint32 = 0x72617720
 
 const maxListPrint = 5
 
@@ -246,7 +246,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 
 		if ainfo {
 			switch atomHeader.Type {
-			case ftypHex:
+			case ftypNum:
 				ftyp, err := getFtyp(content[:skipSize])
 				if err != nil {
 					panic(err)
@@ -254,7 +254,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				ftypTxt := fmt.Sprintf("type: %s, mb: %s, cmb: %s, mv: %d",
 					ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion)
 				printWithIndent(ftypTxt, dopInfoIndent)
-			case mdatHex:
+			case mdatNum:
 				mdat, err := getMdat(content)
 				if err != nil {
 					panic(err)
@@ -265,7 +265,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				if skipSize == 1 {
 					skipSize = uint64(mdat.ExtendedSize)
 				}
-			case mvhdHex:
+			case mvhdNum:
 				var mvhd MovieHeaderAtom
 				err := getStruct(content[:atomHeader.Size], &mvhd)
 				if err != nil {
@@ -280,18 +280,18 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				printWithIndent(
 					fmt.Sprintf("duration: %fs, timeScale: %d, matrix: %v", durationSec, mvhd.TimeScale, mvhd.Matrix),
 					dopInfoIndent)
-			case _swrHex:
+			case _swrNum:
 				sgi := content[8:skipSize]
 				sgiTxt := string(sgi)
 				sgiTxt = strings.ReplaceAll(sgiTxt, "\n", "")
 				sgiTxt = strings.ReplaceAll(sgiTxt, "\r", "")
 				printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), dopInfoIndent)
-			case stsdHex:
+			case stsdNum:
 				var dri int16
 				binary.Read(bytes.NewReader(content[14:16]), binary.BigEndian, &dri)
 				printWithIndent(fmt.Sprintf("Data ref idx: %v", dri), dopInfoIndent)
 				printAtoms(content[16:atomHeader.Size], nextLevelIndent, ainfo)
-			case stscHex:
+			case stscNum:
 				stsc, err := getStsc(content[:atomHeader.Size])
 				if err != nil {
 					printWithIndent(fmt.Sprintf("%v", err), indent)
@@ -309,7 +309,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
 					}
 				}
-			case stcoHex:
+			case stcoNum:
 				stco, err := getStco(content[:atomHeader.Size])
 				if err != nil {
 					printWithIndent(fmt.Sprintf("%v", err), indent)
@@ -347,7 +347,7 @@ func findAtomsData(data []byte, t uint32, atom *[][]byte) {
 		typeInt  := header.Type
 		if typeInt == t {
 			*atom = append(*atom, data[:skipSize])
-		} else if header.Type == stsdHex {
+		} else if header.Type == stsdNum {
 			findAtomsData(data[16:header.Size], t, atom)
 		} else if slices.Contains(parentsAtoms, header.Type) {
 			findAtomsData(data[8:skipSize], t, atom)
@@ -386,20 +386,20 @@ func containsAtom(data []byte, atomNum uint32) bool {
 }
 
 func exportFrames(data []byte, dir string, ) error {
-	if !containsAtom(data, trakHex) {
+	if !containsAtom(data, trakNum) {
 		return errors.New("there are no trak atoms in passed data!")
 	}
 
 	var err error
 	traksData := make([][]byte, 0)
-	findAtomsData(data, trakHex, &traksData)
+	findAtomsData(data, trakNum, &traksData)
 
 	var videoStco *Stco
 	if len(traksData) != 0 {
 		for _, ad := range traksData {
-			if containsAtom(ad, raw_Hex) {
+			if containsAtom(ad, raw_Num) {
 				tmp := make([][]byte, 0)
-				findAtomsData(ad, stcoHex, &tmp)
+				findAtomsData(ad, stcoNum, &tmp)
 				if len(tmp) != 1 {
 					return errors.New("got invalid result on stco searchin")
 				}
@@ -408,7 +408,7 @@ func exportFrames(data []byte, dir string, ) error {
 			}
 		}
 	} else {
-		fmt.Println("atom", uint32ToString(trakHex), "was not found!")
+		fmt.Println("atom", uint32ToString(trakNum), "was not found!")
 	}
 
 	if videoStco == nil {
