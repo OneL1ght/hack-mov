@@ -16,29 +16,31 @@ import (
 
 const fccSize uint = 4
 const minAtomSize int = 8
-const ftypHex = 0x66747970
-const wideHex = 0x77696465
-const mdatHex = 0x6d646174
-const moovHex = 0x6d6f6f76
-const mvhdHex = 0x6d766864
-const trakHex = 0x7472616b
-const tkhdHex = 0x746b6864
-const edtsHex = 0x65647473
-const mdiaHex = 0x6d646961
-const udtaHex = 0x75647461
-const _swrHex = 0xa9737772
-const minfHex = 0x6d696e66
-const stblHex = 0x7374626c
-const stsdHex = 0x73747364
-const stcoHex = 0x7374636f // chunk offsets
-const stscHex = 0x73747363 // sample to chunk
+const ftypHex uint32 = 0x66747970
+const wideHex uint32 = 0x77696465
+const mdatHex uint32 = 0x6d646174
+const moovHex uint32 = 0x6d6f6f76
+const mvhdHex uint32 = 0x6d766864
+const trakHex uint32 = 0x7472616b
+const tkhdHex uint32 = 0x746b6864
+const edtsHex uint32 = 0x65647473
+const mdiaHex uint32 = 0x6d646961
+const udtaHex uint32 = 0x75647461
+const _swrHex uint32 = 0xa9737772
+const minfHex uint32 = 0x6d696e66
+const stblHex uint32 = 0x7374626c
+const stsdHex uint32 = 0x73747364
+const stcoHex uint32 = 0x7374636f // chunk offsets
+const stscHex uint32 = 0x73747363 // sample to chunk
+const mp4aHex uint32 = 0x6d703461
+const raw_Hex uint32 = 0x72617720
 
 type fourCC = [fccSize]byte
 
 type ImgDims struct {
-	Width  int
-	Height int
-	Chan   int
+	Width  int32
+	Height int32
+	Chan   int32
 }
 
 func copyBytes(content *[]byte, amount uint32) []byte {
@@ -195,15 +197,15 @@ func readAtomHeader(content []byte) (AtomHeader, error) {
 
 func writeImg(data []byte, path string, dims ImgDims) error {
 	imgSizeB := dims.Width * dims.Height * dims.Chan
-	if len(data) != imgSizeB {
+	if int32(len(data)) != imgSizeB {
 		 return errors.New("got data of invalid length!")
 	}
-	img := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{dims.Width, dims.Height}})
+	img := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{int(dims.Width), int(dims.Height)}})
 	for r := range dims.Height {
 		for c := range dims.Width {
-			pos := r * dims.Width * 3 + c * 3
-			px  := data[pos:pos+3]
-			img.SetRGBA(r, c, color.RGBA{px[0], px[1], px[2], 255})
+			pos := r * dims.Width * dims.Chan + c * dims.Chan
+			px  := data[pos:pos+dims.Chan]
+			img.SetRGBA(int(c), int(r), color.RGBA{px[0], px[1], px[2], 255})
 		}
 	}
 
