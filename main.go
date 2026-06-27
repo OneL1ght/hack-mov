@@ -301,10 +301,10 @@ func printAtoms(content []byte, indent int) {
 				printWithIndent(fmt.Sprintf("%v", err), indent)
 				return
 			}
-			for i := 0; i < len(stco.ChunkOffsets); i += 2 {
-				if i < 1 { continue }
+			for i := 0; i < len(stco.ChunkOffsets); i += 1 {
 				printWithIndent(fmt.Sprintf("offset: %v", stco.ChunkOffsets[i]), dopInfoIndent)
 			}
+
 		case moovHex, udtaHex, trakHex, mdiaHex, minfHex, stblHex: // atoms contains children
 			printAtoms(content[8:skipSize], nextLevelIndent)
 		}
