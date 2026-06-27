@@ -4,16 +4,20 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"flag"
 	"fmt"
 	"image"
 	"image/color"
 	"image/png"
+	"path"
 	"strconv"
 	"strings"
-	"path"
+	"slices"
 
 	"os"
 )
+
+var parentsAtoms []uint32 = []uint32{moovHex, udtaHex, trakHex, mdiaHex, minfHex, stblHex}
 
 const fccSize uint = 4
 const minAtomSize int = 8
@@ -35,6 +39,8 @@ const stcoHex uint32 = 0x7374636f // chunk offsets
 const stscHex uint32 = 0x73747363 // sample to chunk
 const mp4aHex uint32 = 0x6d703461
 const raw_Hex uint32 = 0x72617720
+
+const maxListPrint = 5
 
 type fourCC = [fccSize]byte
 
@@ -219,7 +225,7 @@ func writeImg(data []byte, path string, dims ImgDims) error {
 	return png.Encode(out, img)
 }
 
-func printAtoms(content []byte, indent int) {
+func printAtoms(content []byte, indent int, ainfo bool) {
 	dopInfoIndent   := indent + 1
 	nextLevelIndent := indent + 4
     if len(content) >= minAtomSize {
@@ -238,78 +244,94 @@ func printAtoms(content []byte, indent int) {
 			fmt.Sprintf("Atom %s |%#x| size: %d",
 			typeSymbs, atomHeader.Type, atomHeader.Size), indent)
 
-		switch atomHeader.Type {
-		case ftypHex:
-			ftyp, err := getFtyp(content[:skipSize])
-			if err != nil {
-				panic(err)
-			}
-			ftypTxt := fmt.Sprintf("type: %s, mb: %s, cmb: %s, mv: %d",
-				ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion)
-			printWithIndent(ftypTxt, dopInfoIndent)
-		case mdatHex:
-			mdat, err := getMdat(content)
-			if err != nil {
-				panic(err)
-			}
-			mdatTxt := fmt.Sprintf(
-				"s: %d, es: %v, ds: %d", mdat.Size, mdat.ExtendedSize, len(mdat.Data))
-			printWithIndent(mdatTxt, dopInfoIndent)
-			if skipSize == 1 {
-				skipSize = uint64(mdat.ExtendedSize)
-			}
-		case mvhdHex:
-			var mvhd MovieHeaderAtom
-			err := getStruct(content[:atomHeader.Size], &mvhd)
-			if err != nil {
-				panic(err)
-			}
-			ts := mvhd.TimeScale
-			if ts == 0 {
-				ts = 1
-			}
-			durationSec := float32(mvhd.Duration) / float32(ts)
-			// TODO: get the matrix
-			printWithIndent(
-				fmt.Sprintf("duration: %fs, timeScale: %d, matrix: %v", durationSec, mvhd.TimeScale, mvhd.Matrix),
-				dopInfoIndent)
-		case _swrHex:
-			sgi := content[8:skipSize]
-			sgiTxt := string(sgi)
-			sgiTxt = strings.ReplaceAll(sgiTxt, "\n", "")
-			sgiTxt = strings.ReplaceAll(sgiTxt, "\r", "")
-			printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), dopInfoIndent)
-		case stsdHex:
-			var dri int16
-			binary.Read(bytes.NewReader(content[14:16]), binary.BigEndian, &dri)
-			printWithIndent(fmt.Sprintf("Data ref idx: %v", dri), dopInfoIndent)
-			printAtoms(content[16:atomHeader.Size], nextLevelIndent)
-		case stscHex:
-			stsc, err := getStsc(content[:atomHeader.Size])
-			if err != nil {
-				printWithIndent(fmt.Sprintf("%v", err), indent)
-				return
-			}
-			for _, row := range stsc.Sample2Chunk {
+		if ainfo {
+			switch atomHeader.Type {
+			case ftypHex:
+				ftyp, err := getFtyp(content[:skipSize])
+				if err != nil {
+					panic(err)
+				}
+				ftypTxt := fmt.Sprintf("type: %s, mb: %s, cmb: %s, mv: %d",
+					ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion)
+				printWithIndent(ftypTxt, dopInfoIndent)
+			case mdatHex:
+				mdat, err := getMdat(content)
+				if err != nil {
+					panic(err)
+				}
+				mdatTxt := fmt.Sprintf(
+					"s: %d, es: %v, ds: %d", mdat.Size, mdat.ExtendedSize, len(mdat.Data))
+				printWithIndent(mdatTxt, dopInfoIndent)
+				if skipSize == 1 {
+					skipSize = uint64(mdat.ExtendedSize)
+				}
+			case mvhdHex:
+				var mvhd MovieHeaderAtom
+				err := getStruct(content[:atomHeader.Size], &mvhd)
+				if err != nil {
+					panic(err)
+				}
+				ts := mvhd.TimeScale
+				if ts == 0 {
+					ts = 1
+				}
+				durationSec := float32(mvhd.Duration) / float32(ts)
+				// TODO: get the matrix
 				printWithIndent(
-					fmt.Sprintf("first: %v, S/Chunk: %v, SdescID: %v", row.First, row.SpC, row.Id),
+					fmt.Sprintf("duration: %fs, timeScale: %d, matrix: %v", durationSec, mvhd.TimeScale, mvhd.Matrix),
 					dopInfoIndent)
-			}
-		case stcoHex:
-			stco, err := getStco(content[:atomHeader.Size])
-			if err != nil {
-				printWithIndent(fmt.Sprintf("%v", err), indent)
-				return
-			}
-			for i := 0; i < len(stco.ChunkOffsets); i += 1 {
-				printWithIndent(fmt.Sprintf("offset: %v", stco.ChunkOffsets[i]), dopInfoIndent)
-			}
+			case _swrHex:
+				sgi := content[8:skipSize]
+				sgiTxt := string(sgi)
+				sgiTxt = strings.ReplaceAll(sgiTxt, "\n", "")
+				sgiTxt = strings.ReplaceAll(sgiTxt, "\r", "")
+				printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), dopInfoIndent)
+			case stsdHex:
+				var dri int16
+				binary.Read(bytes.NewReader(content[14:16]), binary.BigEndian, &dri)
+				printWithIndent(fmt.Sprintf("Data ref idx: %v", dri), dopInfoIndent)
+				printAtoms(content[16:atomHeader.Size], nextLevelIndent, ainfo)
+			case stscHex:
+				stsc, err := getStsc(content[:atomHeader.Size])
+				if err != nil {
+					printWithIndent(fmt.Sprintf("%v", err), indent)
+					return
+				}
+				count := len(stsc.Sample2Chunk)
+				if count > 0 {
+					for i := range min(maxListPrint, count) {
+						row := stsc.Sample2Chunk[i]
+						printWithIndent(
+							fmt.Sprintf("first: %v, S/Chunk: %v, SdescID: %v", row.First, row.SpC, row.Id),
+							dopInfoIndent)
+					}
+					if count > maxListPrint {
+						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
+					}
+				}
+			case stcoHex:
+				stco, err := getStco(content[:atomHeader.Size])
+				if err != nil {
+					printWithIndent(fmt.Sprintf("%v", err), indent)
+					return
+				}
 
-		case moovHex, udtaHex, trakHex, mdiaHex, minfHex, stblHex: // atoms contains children
-			printAtoms(content[8:skipSize], nextLevelIndent)
+				count := len(stco.ChunkOffsets)
+				if count > 0 {
+					for i := range min(maxListPrint, count) {
+						printWithIndent(fmt.Sprintf("offset: %v", stco.ChunkOffsets[i]), dopInfoIndent)
+					}
+					if count > maxListPrint {
+						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
+					}
+				}
+			}
+		}
+		if slices.Contains(parentsAtoms, atomHeader.Type) {
+			printAtoms(content[8:skipSize], nextLevelIndent, ainfo)
 		}
 
-		printAtoms(content[skipSize:], indent)
+		printAtoms(content[skipSize:], indent, ainfo)
     }
 }
 
@@ -325,13 +347,10 @@ func findAtomsData(data []byte, t uint32, atom *[][]byte) {
 		typeInt  := header.Type
 		if typeInt == t {
 			*atom = append(*atom, data[:skipSize])
-		} else {
-			switch header.Type {
-			case stsdHex:
-				findAtomsData(data[16:header.Size], t, atom)
-			case moovHex, udtaHex, trakHex, mdiaHex, minfHex, stblHex: // atoms contains children
-				findAtomsData(data[8:skipSize], t, atom)
-			}
+		} else if header.Type == stsdHex {
+			findAtomsData(data[16:header.Size], t, atom)
+		} else if slices.Contains(parentsAtoms, header.Type) {
+			findAtomsData(data[8:skipSize], t, atom)
 		}
 
 		findAtomsData(data[skipSize:], t, atom)
@@ -415,18 +434,46 @@ func exportFrames(data []byte, dir string, ) error {
 }
 
 func main() {
-	args := os.Args
-	if len(args) < 2 {
-		panic("please provide video file path as an argument!")
+	flag.Usage = func() {
+		fmt.Printf(`
+hack-mov [options] mode
+
+There are 2 modes of this script:
+    explore: prints all atoms, and additional info if -ainfo specified
+    export:  exports all video frames into created directory in calling directory
+
+Example:
+  hack-mov -f video.mov -ainfo explore
+
+Options:
+`)
+		flag.PrintDefaults()
 	}
-	filePath := os.Args[1]
-	content, err := os.ReadFile(filePath)
+
+	filePath := flag.String("f", "", "video file path [explore, export]")
+	ainfo    := flag.Bool("ainfo", false, "prints additional info for atoms [explore]")
+	flag.Parse()
+	tail := flag.Args()
+	if len(tail) < 1 {
+		panic("no mode was provided")
+	}
+	mode := tail[0]
+
+	content, err := os.ReadFile(*filePath)
 	if err != nil {
 		panic(err)
 	}
 
-	// printAtoms(content, 0)
-
-	imgsDir := "./imgs-" + path.Base(filePath) 
-	exportFrames(content, imgsDir)
+	switch mode {
+	case "explore":
+		if filePath == nil {
+			panic("no file path was provided!")
+		}
+		printAtoms(content, 0, *ainfo)
+	case "export":
+		imgsDir := "./imgs-" + path.Base(*filePath)
+		exportFrames(content, imgsDir)
+	default:
+		panic("got wrong mode!")
+	}
 }
