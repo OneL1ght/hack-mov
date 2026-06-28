@@ -10,9 +10,10 @@ import (
 	"image/color"
 	"image/png"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
-	"slices"
+	"unicode"
 
 	"os"
 )
@@ -282,15 +283,32 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					dopInfoIndent)
 			case _swrNum:
 				sgi := content[8:skipSize]
-				sgiTxt := string(sgi)
-				sgiTxt = strings.ReplaceAll(sgiTxt, "\n", "")
-				sgiTxt = strings.ReplaceAll(sgiTxt, "\r", "")
+				sgiTxt := underscoreSpecials(string(sgi))
 				printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), dopInfoIndent)
 			case stsdNum:
-				var dri int16
-				binary.Read(bytes.NewReader(content[14:16]), binary.BigEndian, &dri)
-				printWithIndent(fmt.Sprintf("Data ref idx: %v", dri), dopInfoIndent)
-				printAtoms(content[16:atomHeader.Size], nextLevelIndent, ainfo)
+				var noe int32
+				binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
+				printWithIndent(fmt.Sprintf("noe: %v", noe), dopInfoIndent)
+				sdt := content[16:atomHeader.Size]
+				rowSize := 16
+				for i := 0; i < len(sdt); {
+					start := i * rowSize
+					row := sdt[start:start+rowSize]
+
+					var sampleSize, dfmt int32
+					var dri int16
+					binary.Read(bytes.NewReader(row[:4]), binary.BigEndian, &sampleSize)
+					binary.Read(bytes.NewReader(row[4:8]), binary.BigEndian, &dfmt)
+					binary.Read(bytes.NewReader(row[14:]), binary.BigEndian, &dri)
+					printWithIndent(
+						fmt.Sprintf("s: %v, dfmt: %#x, dfmt(str): %v, dri: %v",
+							sampleSize, dfmt, uint32ToString(uint32(dfmt)), dri),
+						dopInfoIndent)
+					tail := underscoreSpecials(string(row[16:sampleSize]))
+					printWithIndent(fmt.Sprintf("tail txt: %s", tail), dopInfoIndent)
+
+					i += int(sampleSize)
+				}
 			case stscNum:
 				stsc, err := getStsc(content[:atomHeader.Size])
 				if err != nil {
@@ -327,6 +345,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				}
 			}
 		}
+
 		if slices.Contains(parentsAtoms, atomHeader.Type) {
 			printAtoms(content[8:skipSize], nextLevelIndent, ainfo)
 		}
@@ -431,6 +450,20 @@ func exportFrames(data []byte, dir string, ) error {
 	}
 	
 	return nil
+}
+
+func underscoreSpecials(s string) string {
+	f := func(r rune) rune {
+		if unicode.IsSpace(r) && r != '\n' && r != '\r' {
+			return '_'
+		}
+		if unicode.IsDigit(r) || unicode.IsLetter(r) || unicode.IsPunct(r) {
+			return r
+		}
+		return '_'
+	}
+
+	return strings.Map(f, s)
 }
 
 func main() {
