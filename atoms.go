@@ -47,12 +47,10 @@ type Mdat struct {
 }
 
 type Stco struct {
-	Size         uint32
-	Type         uint32
-	Version      byte
-	Flags        [3]byte
+	AtomHeader
+	FullBox
 	NOE          uint32
-	ChunkOffsets []int32
+	ChunkOffsets []int32 // offsets list in chunks order [o1, o2..], meand [ch1, ch2..]
 }
 
 type Stsc struct {

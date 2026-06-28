@@ -11,7 +11,6 @@ import (
 	"image/png"
 	"path"
 	"slices"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -118,15 +117,21 @@ func getMdat(data []byte) (Mdat, error) {
 
 func getStco(data []byte) (*Stco, error) {
 	var res *Stco
+	var fullBox FullBox
+
 	header, err := readAtomHeader(data[:8])
 	if err != nil {
 		return res, err
 	}
 
+	binary.Read(bytes.NewReader(data[8:12]), binary.BigEndian, &fullBox)
+	if err != nil {
+		return res, err
+	}
+
 	res = &Stco{
-		Size: header.Size,
-		Type: header.Type,
-		Version: data[8],
+		AtomHeader: header,
+		FullBox: fullBox,
 		ChunkOffsets: make([]int32, len(data[16:header.Size]) / 4),
 	}
 
@@ -194,17 +199,9 @@ func printWithIndent(txt string, indent int) {
 }
 
 func readAtomHeader(content []byte) (AtomHeader, error) {
-	if len(content) < 8 {
-		return AtomHeader{}, errors.New(
-			"got too few bytes for extract atom header: " + strconv.Itoa(len(content)))
-	}
-	var size, typeInt uint32
-	defaultSizeBytes := copyBytes(&content, 4)
-	binary.Read(bytes.NewReader(defaultSizeBytes), binary.BigEndian, &size)
-	withoutSize := content[4:]
-	typeBytes   := copyBytes(&withoutSize, 4)
-	binary.Read(bytes.NewReader(typeBytes), binary.BigEndian, &typeInt)
-	return AtomHeader{size, typeInt}, nil
+	var header AtomHeader
+	err := binary.Read(bytes.NewReader(content), binary.BigEndian, &header)
+	return header, err
 }
 
 func writeImg(data []byte, path string, dims ImgDims) error {
