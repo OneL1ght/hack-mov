@@ -243,9 +243,10 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 			typeSymbs, atomHeader.Type, atomHeader.Size), indent)
 
 		if ainfo {
+			atomData := content[:skipSize]
 			switch atomHeader.Type {
 			case ftypNum:
-				ftyp, err := getFtyp(content[:skipSize])
+				ftyp, err := getFtyp(atomData)
 				if err != nil {
 					panic(err)
 				}
@@ -253,7 +254,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion)
 				printWithIndent(ftypTxt, dopInfoIndent)
 			case mdatNum:
-				mdat, err := getMdat(content)
+				mdat, err := getMdat(atomData)
 				if err != nil {
 					panic(err)
 				}
@@ -265,7 +266,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				}
 			case mvhdNum:
 				var mvhd MovieHeaderAtom
-				err := getStruct(content[:atomHeader.Size], &mvhd)
+				err := getStruct(atomData, &mvhd)
 				if err != nil {
 					panic(err)
 				}
@@ -307,7 +308,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					i += int(sampleSize)
 				}
 			case stscNum:
-				stsc, err := getStsc(content[:atomHeader.Size])
+				stsc, err := getStsc(atomData)
 				if err != nil {
 					printWithIndent(fmt.Sprintf("%v", err), indent)
 					return
@@ -325,7 +326,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					}
 				}
 			case stcoNum:
-				stco, err := getStco(content[:atomHeader.Size])
+				stco, err := getStco(atomData)
 				if err != nil {
 					printWithIndent(fmt.Sprintf("%v", err), indent)
 					return
