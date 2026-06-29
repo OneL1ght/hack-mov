@@ -124,7 +124,7 @@ func getStco(data []byte) (*Stco, error) {
 		return res, err
 	}
 
-	binary.Read(bytes.NewReader(data[8:12]), binary.BigEndian, &fullBox)
+	err = binary.Read(bytes.NewReader(data[8:12]), binary.BigEndian, &fullBox)
 	if err != nil {
 		return res, err
 	}
