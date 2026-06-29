@@ -153,6 +153,51 @@ func getStco(data []byte) (*Stco, error) {
 	return res, nil
 }
 
+func getEdts(data []byte) (*Edts, error) {
+	header, err := readAtomHeader(data[:8])
+	if err != nil {
+		return nil, err
+	}
+
+	elstData := data[8:]
+	elstHeader, err := readAtomHeader(elstData[:8])
+	if err != nil {
+		return nil, err
+	}
+
+	var elstFullBox FullBox
+	err = binary.Read(bytes.NewReader(elstData[8:12]), binary.BigEndian, &elstFullBox)
+	if err != nil {
+		return nil, err
+	}
+
+	var elstNoe uint32
+	err = binary.Read(bytes.NewReader(elstData[12:16]), binary.BigEndian, &elstNoe)
+	if err != nil {
+		return nil, err
+	}
+
+	elstEditList := make([]int32, 0)
+	for i := 0; i < len(elstData[16:]); i += 4 {
+		var v int32
+		err = binary.Read(bytes.NewReader(elstData[i:i+4]), binary.BigEndian, &v)
+		if err != nil {
+			return nil, fmt.Errorf("could not read value in EditList: %v", err)
+		}
+		elstEditList = append(elstEditList, v)
+	}
+
+	return &Edts{
+		AtomHeader: header,
+		Elst: Elst{
+			AtomHeader: elstHeader,
+			FullBox: elstFullBox,
+			NOE: elstNoe,
+			EditListTable: elstEditList,
+		},
+	}, nil
+}
+
 func getStsc(data []byte) (*Stsc, error) {
 	var res *Stsc
 	header, err := readAtomHeader(data[:8])
@@ -340,6 +385,16 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					if count > maxListPrint {
 						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
 					}
+				}
+			case edtsNum:
+				edts, err := getEdts(atomData)
+				if err != nil {
+					printWithIndent(fmt.Sprintf("%v", err), indent)
+					return
+				}
+				printWithIndent(fmt.Sprintf("%v", edts), dopInfoIndent)
+				for i := range edts.Elst.EditListTable {
+					printWithIndent(fmt.Sprintf("edit val: %v", i), dopInfoIndent)
 				}
 			}
 		}

@@ -46,6 +46,36 @@ type Mdat struct {
 	Data         []byte // content
 }
 
+type Tkhd struct {
+	AtomHeader
+	FullBox
+	CreationTime     int32
+	ModificationTime int32
+	TrackID          int32
+	_                int32
+	Duration         int32
+	_                [8]byte
+	Layer            int16
+	AlternateGroup   int16
+	Volume           [2]int8 // fixed point int16
+	_                int16
+	MatrixStructure  [36]byte
+	TrackWidth       [2]int16 // fixed point int32
+	TrackHeight      [2]int16 // fixed point int32
+}
+
+type Edts struct {
+	AtomHeader
+	Elst
+}
+
+type Elst struct {
+	AtomHeader
+	FullBox
+	NOE           uint32
+	EditListTable []int32 // An array of 32-bit values, grouped into entries containing 3 values each.
+}
+
 type Stco struct {
 	AtomHeader
 	FullBox
