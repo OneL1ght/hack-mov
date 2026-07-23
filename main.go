@@ -10,9 +10,11 @@ import (
 	"image/color"
 	"image/png"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 	"unicode"
+	"unsafe"
 
 	"os"
 )
@@ -517,6 +519,124 @@ func underscoreSpecials(s string) string {
 	}
 
 	return strings.Map(f, s)
+}
+
+func GetBytesOf[T any](s T) ([]byte, error) {
+	var err error
+	res := make([]byte, 0)
+	v := reflect.ValueOf(s)
+
+	for typ, val := range v.Fields() {
+
+		var b []byte = make([]byte, 0)
+		switch typ.Type.Kind() {
+		case reflect.Slice:
+			if typ.Type.AssignableTo(reflect.TypeFor[[]byte]())  {
+				if cap(val.Bytes()) < 1 { continue }
+				b = val.Bytes()
+			} else {
+				ptr := val.Pointer()
+				elemSize := typ.Type.Elem().Size()
+				b = unsafe.Slice((*byte)(unsafe.Pointer(ptr)), val.Len() * int(elemSize))
+			}
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			 reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			 reflect.Float32, reflect.Float64:
+			b, err = GetBytesOfNumber(val)
+			if err != nil {
+				return nil, err
+			}
+		case reflect.Struct:
+			b, err = GetBytesOfAtomStruct(val)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			return nil, errors.New(
+				"got unsupported type for bytes extracting" + typ.Type.Kind().String())
+		}
+
+		res = slices.Concat(res, b)
+	}
+
+	return res, nil
+}
+
+func GetBytesOfNumber(val reflect.Value) ([]byte, error) {
+	var b []byte
+	var err error
+	switch val.Type().Kind() {
+	case reflect.Int:
+		v := val.Int()
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Int8:
+		v := int8(val.Int())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Int16:
+		v := int16(val.Int())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Int32:
+		v := int32(val.Int())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Int64:
+		v := int32(val.Int())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Uint:
+		v := val.Uint()
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Uint8:
+		v := uint8(val.Uint())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Uint16:
+		v := uint16(val.Uint())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Uint32:
+		v := uint32(val.Uint())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Uint64:
+		v := uint64(val.Uint())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Float32:
+		v := float32(val.Float())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	case reflect.Float64:
+		v := float64(val.Float())
+		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	}
+
+	return b, err
+}
+
+func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
+	var b []byte
+	var err error
+	switch val.Type().String() {
+	case "main.AtomHeader":
+		s := val.Interface().(AtomHeader)
+		b, err = GetBytesOf(s)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("len bytes of ah: %v\n", len(b))
+	case "main.FullBox":
+		s := val.Interface().(FullBox)
+		b, err = GetBytesOf(s)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("len bytes of fb: %v\n", len(b))
+	case "main.SampleChunkRow":
+		s := val.Interface().(SampleChunkRow)
+		b, err = GetBytesOf(s)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("len bytes of schr: %v\n", len(b))
+	default:
+		return nil, errors.New(
+			"got unsupported type for bytes extracting" + val.Type().Kind().String())
+		}
+	return b, err
 }
 
 func main() {
