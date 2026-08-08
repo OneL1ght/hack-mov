@@ -524,6 +524,10 @@ func underscoreSpecials(s string) string {
 	return strings.Map(f, s)
 }
 
+func IsLittleEndianPlatform() bool {
+    return binary.NativeEndian.Uint16([]byte{0x12, 0x34}) == 0x3412
+}
+
 func GetBytesOf[T any](s T) ([]byte, error) {
 	var err error
 	res := make([]byte, 0)
@@ -541,11 +545,19 @@ func GetBytesOf[T any](s T) ([]byte, error) {
 				ptr := val.Pointer()
 				elemSize := typ.Type.Elem().Size()
 				b = unsafe.Slice((*byte)(unsafe.Pointer(ptr)), val.Len() * int(elemSize))
+				if IsLittleEndianPlatform() {
+					for i := range val.Len() {
+						slices.Reverse(b[int(elemSize) * i : int(elemSize) * (i+1)])
+					}
+				}
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 			 reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 			 reflect.Float32, reflect.Float64:
 			b, err = GetBytesOfNumber(val)
+			if IsLittleEndianPlatform() {
+				slices.Reverse(b)
+			}
 			if err != nil {
 				return nil, err
 			}
