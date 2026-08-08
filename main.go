@@ -531,9 +531,8 @@ func IsLittleEndianPlatform() bool {
 func GetBytesOf[T any](s T) ([]byte, error) {
 	var err error
 	res := make([]byte, 0)
-	v := reflect.ValueOf(s)
 
-	for typ, val := range v.Fields() {
+	for typ, val := range reflect.ValueOf(s).Fields() {
 
 		var b []byte = make([]byte, 0)
 		switch typ.Type.Kind() {
@@ -542,9 +541,8 @@ func GetBytesOf[T any](s T) ([]byte, error) {
 				if cap(val.Bytes()) < 1 { continue }
 				b = val.Bytes()
 			} else {
-				ptr := val.Pointer()
 				elemSize := typ.Type.Elem().Size()
-				b = unsafe.Slice((*byte)(unsafe.Pointer(ptr)), val.Len() * int(elemSize))
+				b = unsafe.Slice((*byte)(unsafe.Pointer(val.Pointer())), val.Len() * int(elemSize))
 				if IsLittleEndianPlatform() {
 					for i := range val.Len() {
 						slices.Reverse(b[int(elemSize) * i : int(elemSize) * (i+1)])
