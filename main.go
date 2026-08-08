@@ -94,7 +94,10 @@ func getMdat(data []byte) (Mdat, error) {
 		return mdat, err
 	}
 
-	aType := [4]byte(data[4:8])
+	head, err := readAtomHeader(data)
+	if err != nil {
+		return mdat, err
+	}
 
 	var extendedSize int64
 	err = binary.Read(bytes.NewReader(data[8:aHeaderFieldsSize]), binary.BigEndian, &extendedSize)
@@ -108,9 +111,9 @@ func getMdat(data []byte) (Mdat, error) {
 		aSize = extendedSize
 	}
 	aData := data[aHeaderFieldsSize:aSize]
+
 	mdat = Mdat{
-		Size: size,
-		Type: aType,
+		AtomHeader: head,
 		ExtendedSize: extendedSize,
 		Data: aData,
 	}
@@ -297,8 +300,8 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				if err != nil {
 					panic(err)
 				}
-				ftypTxt := fmt.Sprintf("type: %s, mb: %s, cmb: %s, mv: %d",
-					ftyp.Type, ftyp.MajorBrand, ftyp.CompatibleBrands, ftyp.MinorVersion)
+				ftypTxt := fmt.Sprintf("mb: %s, cmb: %s, mv: %d",
+					uint32ToString(ftyp.MajorBrand), uint32ToString(ftyp.CompatibleBrands), ftyp.MinorVersion)
 				printWithIndent(ftypTxt, dopInfoIndent)
 			case mdatNum:
 				mdat, err := getMdat(atomData)
