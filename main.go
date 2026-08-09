@@ -84,7 +84,9 @@ func getMdat(data []byte) (Mdat, error) {
 
 	var mdat Mdat
 	if len(data) < aHeaderFieldsSize {
-		return mdat, errors.New("too low amount of bytes received!")
+		return mdat, fmt.Errorf(
+			"too low amount of bytes received! " +
+			"data length smaller than header size: %v < %v", len(data), aHeaderFieldsSize)
 	}
 
 	var size int32
@@ -566,7 +568,7 @@ func GetBytesOf[T any](s T) ([]byte, error) {
 			}
 		default:
 			return nil, errors.New(
-				"got unsupported type for bytes extracting" + typ.Type.Kind().String())
+				"got unsupported type for bytes extracting: " + typ.Type.Kind().String())
 		}
 
 		res = slices.Concat(res, b)
@@ -647,7 +649,7 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 		fmt.Printf("len bytes of schr: %v\n", len(b))
 	default:
 		return nil, errors.New(
-			"got unsupported type for bytes extracting" + val.Type().Kind().String())
+			"got unsupported atom type for bytes extracting: " + val.Type().Kind().String())
 		}
 	return b, err
 }
