@@ -733,9 +733,11 @@ hack-mov [options] mode
 There are 2 modes of this script:
     explore: prints all atoms, and additional info if -ainfo specified
     export:  exports all video frames into created directory in calling directory
+	write:   write demo result.mov
 
 Example:
   hack-mov -f video.mov -ainfo explore
+  hack-mov write
 
 Options:
 `)
