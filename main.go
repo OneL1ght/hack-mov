@@ -592,7 +592,7 @@ func GetBytesOfNumber(val reflect.Value) ([]byte, error) {
 		v := int32(val.Int())
 		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
 	case reflect.Int64:
-		v := int32(val.Int())
+		v := int64(val.Int())
 		b = unsafe.Slice((*byte)(unsafe.Pointer(&v)), unsafe.Sizeof(v))
 	case reflect.Uint:
 		v := val.Uint()
