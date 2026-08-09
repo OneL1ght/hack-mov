@@ -294,6 +294,10 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 			fmt.Sprintf("Atom %s |%#x| size: %d",
 			typeSymbs, atomHeader.Type, atomHeader.Size), indent)
 
+		if skipSize > uint64(len(content)) {
+			panic(fmt.Sprint("skip size bigger than content length!", skipSize, ">", len(content)))
+		}
+
 		if ainfo {
 			atomData := content[:skipSize]
 			switch atomHeader.Type {
