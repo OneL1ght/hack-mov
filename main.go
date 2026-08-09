@@ -535,50 +535,56 @@ func IsLittleEndianPlatform() bool {
 }
 
 func GetBytesOf[T any](s T) ([]byte, error) {
-	var err error
 	res := make([]byte, 0)
 
-	for typ, val := range reflect.ValueOf(s).Fields() {
-
-		var b []byte = make([]byte, 0)
-		switch typ.Type.Kind() {
-		case reflect.Slice:
-			if typ.Type.AssignableTo(reflect.TypeFor[[]byte]())  {
-				if cap(val.Bytes()) < 1 { continue }
-				b = val.Bytes()
-			} else {
-				elemSize := typ.Type.Elem().Size()
-				b = unsafe.Slice((*byte)(unsafe.Pointer(val.Pointer())), val.Len() * int(elemSize))
-				if IsLittleEndianPlatform() {
-					for i := range val.Len() {
-						slices.Reverse(b[int(elemSize) * i : int(elemSize) * (i+1)])
-					}
-				}
-			}
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			 reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-			 reflect.Float32, reflect.Float64:
-			b, err = GetBytesOfNumber(val)
-			if IsLittleEndianPlatform() {
-				slices.Reverse(b)
-			}
-			if err != nil {
-				return nil, err
-			}
-		case reflect.Struct:
-			b, err = GetBytesOfAtomStruct(val)
-			if err != nil {
-				return nil, err
-			}
-		default:
-			return nil, errors.New(
-				"got unsupported type for bytes extracting: " + typ.Type.Kind().String())
-		}
+	for field, val := range reflect.ValueOf(s).Fields() {
+		b, err := GetBytesOfTypeValue(field.Type, val)
+		if err != nil { return nil, err }
 
 		res = slices.Concat(res, b)
 	}
 
 	return res, nil
+}
+
+func GetBytesOfTypeValue(typ reflect.Type, val reflect.Value) ([]byte, error) {
+	var b []byte
+	var err error
+
+	switch typ.Kind() {
+	case reflect.Slice:
+		if typ.AssignableTo(reflect.TypeFor[[]byte]())  {
+			b = val.Bytes()
+			break
+		}
+		elemSize := typ.Elem().Size()
+		b = unsafe.Slice((*byte)(val.UnsafePointer()), val.Len() * int(elemSize))
+		if IsLittleEndianPlatform() {
+			for i := range val.Len() {
+				slices.Reverse(b[int(elemSize) * i : int(elemSize) * (i+1)])
+			}
+		}
+	case reflect.Array:
+		for _, elem := range val.Seq2() {
+			eb, err := GetBytesOfTypeValue(elem.Type(), elem)
+			if err != nil { return nil, err }
+			b = slices.Concat(b, eb)
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		 reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		 reflect.Float32, reflect.Float64:
+		b, err = GetBytesOfNumber(val)
+		if IsLittleEndianPlatform() { slices.Reverse(b) }
+		if err != nil { return nil, err }
+	case reflect.Struct:
+		b, err = GetBytesOfAtomStruct(val)
+		if err != nil { return nil, err }
+	default:
+		return nil, errors.New(
+			"got unsupported type for bytes extracting: " + typ.Kind().String())
+	}
+
+	return b, nil
 }
 
 func GetBytesOfNumber(val reflect.Value) ([]byte, error) {
@@ -636,21 +642,18 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("len bytes of ah: %v\n", len(b))
 	case "main.FullBox":
 		s := val.Interface().(FullBox)
 		b, err = GetBytesOf(s)
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("len bytes of fb: %v\n", len(b))
 	case "main.SampleChunkRow":
 		s := val.Interface().(SampleChunkRow)
 		b, err = GetBytesOf(s)
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("len bytes of schr: %v\n", len(b))
 	default:
 		return nil, errors.New(
 			"got unsupported atom type for bytes extracting: " + val.Type().Kind().String())
