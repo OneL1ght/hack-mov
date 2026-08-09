@@ -21,6 +21,11 @@ import (
 
 var parentsAtoms []uint32 = []uint32{moovNum, udtaNum, trakNum, mdiaNum, minfNum, stblNum}
 
+var atomHeaderSize uint32 = 8
+var fullBoxSize uint32 = 4
+var ftypSize uint32 = 20
+var mvhdSize uint32 = 98
+
 const fccSize uint = 4
 const minAtomSize int = 8
 const ftypNum uint32 = 0x66747970
@@ -661,6 +666,65 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 	return b, err
 }
 
+func writeDemo(file *os.File) error {
+	brand, err := getUintOfFourCCStr("qt  ")
+	if err != nil { return err }
+	ftyp := Ftyp{AtomHeader{uint32(unsafe.Sizeof(Ftyp{})), ftypNum}, brand, 1, brand}
+	b, err := GetBytesOf(ftyp)
+	if err != nil { return err }
+	file.Write(b)
+
+	wide := AtomHeader{8, wideNum}
+	b, err = GetBytesOf(wide)
+	if err != nil { return err }
+	file.Write(b)
+
+	contentSize := 1280 * 720 * 3 * 2
+	content := make([]byte, contentSize)
+	mdat := Mdat{
+		AtomHeader{
+			uint32(unsafe.Sizeof(AtomHeader{}) + unsafe.Sizeof(uint64(0)) + uintptr(contentSize)),
+			mdatNum},
+		0,
+		content,
+	}
+	b, err = GetBytesOf(mdat)
+	if err != nil { return err }
+	file.Write(b)
+
+	// moov(mvhd, trak(tkhd, edts, mdia(...)))
+	mvhd, err := GetBytesOf(MovieHeaderAtom{
+		AtomHeader{mvhdSize, mvhdNum},
+		FullBox{0, [3]byte{0,0,0}},
+		0, // CreationTime  (версия 0) или 8 байт (версия 1)
+		0, // ModificationTime  (версия 0) или 8 байт (версия 1)
+		1, // TimeScale  временная шкала в тиках/секунду
+		2, // Duration  (версия 0) или 8 байт (версия 1)
+		0x00010000, // PreferredRate  16.16 фиксированная точка (1.0 = 0x00010000)
+		0x0100, // PreferredVolume  8.8 фиксированная точка (1.0 = 0x0100)
+		[9]int32{1,0,0,0,1,0,0,0,1}, // Matrix  матрица преобразования 3x3
+		0, // PreviewTime
+		0, // PreviewDuration
+		0, // PosterTime
+		0, // SelectionTime
+		0, // SelectionDuration
+		0, // CurrentTime
+		1, // NextTrackID  - следующий доступный ID трека
+	})
+	if err != nil { return err }
+
+	moovBytes, err := GetBytesOf(AtomHeader{atomHeaderSize + mvhdSize, moovNum})
+	if err != nil { return err }
+
+	moovBytes = slices.Concat(moovBytes, mvhd)
+	file.Write(moovBytes)
+
+	fmt.Println("writing end up successfully!")
+	return nil
+}
+
+func panicIfErr(err error) { if err != nil { panic(err) } }
+
 func main() {
 	flag.Usage = func() {
 		fmt.Printf(`
@@ -687,20 +751,30 @@ Options:
 	}
 	mode := tail[0]
 
-	content, err := os.ReadFile(*filePath)
-	if err != nil {
-		panic(err)
-	}
-
 	switch mode {
 	case "explore":
 		if filePath == nil {
 			panic("no file path was provided!")
 		}
+		content, err := os.ReadFile(*filePath)
+		if err != nil {
+			panic(err)
+		} else if len(content) == 0 {
+			panic(fmt.Errorf("nothing to explore, file is empty"))
+		}
 		printAtoms(content, 0, *ainfo)
 	case "export":
+		content, err := os.ReadFile(*filePath)
+		if err != nil {
+			panic(err)
+		}
 		imgsDir := "./imgs-" + path.Base(*filePath)
 		exportFrames(content, imgsDir)
+	case "write":
+		file, err := os.Create("result.mov")
+		defer file.Close()
+		err = writeDemo(file)
+		panicIfErr(err)
 	default:
 		panic("got wrong mode!")
 	}

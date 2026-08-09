@@ -15,20 +15,20 @@ type FullBox struct {
 type MovieHeaderAtom struct {
 	AtomHeader
 	FullBox
-	CreationTime      uint32   // 4 байта (версия 0) или 8 байт (версия 1)
-	ModificationTime  uint32   // 4 байта (версия 0) или 8 байт (версия 1)
-	TimeScale         uint32   // 4 байта - временная шкала в тиках/секунду
-	Duration          uint32   // 4 байта (версия 0) или 8 байт (версия 1)
-	PreferredRate     uint32   // 4 байта - 16.16 фиксированная точка (1.0 = 0x00010000)
-	PreferredVolume   uint16   // 2 байта - 8.8 фиксированная точка (1.0 = 0x0100)
-	Matrix            [9]int32 // 36 байт - матрица преобразования 3x3
-	PreviewTime       uint32   // 4 байта
-	PreviewDuration   uint32   // 4 байта
-	PosterTime        uint32   // 4 байта
-	SelectionTime     uint32   // 4 байта
-	SelectionDuration uint32   // 4 байта
-	CurrentTime       uint32   // 4 байта
-	NextTrackID       uint32   // 4 байта - следующий доступный ID трека
+	CreationTime      uint32   // (версия 0) или 8 байт (версия 1)
+	ModificationTime  uint32   // (версия 0) или 8 байт (версия 1)
+	TimeScale         uint32   // временная шкала в тиках/секунду
+	Duration          uint32   // (версия 0) или 8 байт (версия 1)
+	PreferredRate     uint32   // 16.16 фиксированная точка (1.0 = 0x00010000) 4 * 9
+	PreferredVolume   uint16   // 8.8 фиксированная точка (1.0 = 0x0100)       2
+	Matrix            [9]int32 // матрица преобразования 3x3                   36
+	PreviewTime       uint32
+	PreviewDuration   uint32
+	PosterTime        uint32
+	SelectionTime     uint32
+	SelectionDuration uint32
+	CurrentTime       uint32
+	NextTrackID       uint32   // - следующий доступный ID трека               4 * 7
 }
 
 type Ftyp struct {
