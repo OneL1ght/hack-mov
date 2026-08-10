@@ -97,3 +97,15 @@ type SampleChunkRow struct {
 	SpC   int32 // sample per chunk
 	Id    int32
 }
+
+type Mdhd struct {
+	AtomHeader
+	Version      byte    // One byte that specifies the version of this header atom.
+	Flags        [3]byte // Three bytes of space for media header flags.
+	CreationTime int32   // specifies the creation date for the media atom.
+	Modification int32   // specifies the last modification date for the media atom.
+	TimeScale    int32   // scale A time value that indicates the time scale for this media.
+	Duration     int32   // The duration of this media in units of its time scale.
+	Language     int16   // specifies the language code for this media.
+	Quality      int16   // specifies the media’s playback quality.
+}

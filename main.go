@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unsafe"
 
@@ -26,6 +27,7 @@ var fullBoxSize uint32 = 4
 var ftypSize uint32 = 20
 var mvhdSize uint32 = 98
 
+const russLangCode int16 = 32
 const fccSize uint = 4
 const minAtomSize int = 8
 const ftypNum uint32 = 0x66747970
@@ -46,6 +48,7 @@ const stcoNum uint32 = 0x7374636f // chunk offsets
 const stscNum uint32 = 0x73747363 // sample to chunk
 const mp4aNum uint32 = 0x6d703461
 const raw_Num uint32 = 0x72617720
+const mdhdNum uint32 = 0x6d646864
 
 const maxListPrint = 5
 
@@ -738,14 +741,42 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	edts = slices.Replace(edts, 0, 4, edtsSize...)
 
+	tm := int32(time.Since(time.Date(1904, 1, 1, 12, 0, 0, 0, time.Local)).Seconds()) // its not valid!
+	mdhd, err := GetBytesOf(Mdhd{
+		AtomHeader{0, mdhdNum},
+		1,
+		[3]byte{0,0,1},
+		tm,
+		tm,
+		1,
+		2,
+		russLangCode,
+		1,
+	}) 
+	if err != nil { return err }
+	mdhdSize, err := GetBytesOf(uint32(len(mdhd)))
+	if err != nil { return err }
+	mdhd = slices.Replace(mdhd, 0, 4, mdhdSize...)
+
+	mdia, err := GetBytesOf(struct {
+		Head AtomHeader
+		Mdhd []byte
+	}{
+		AtomHeader{atomHeaderSize + uint32(len(mdhd)), mdiaNum},
+		mdhd,
+	})
+	if err != nil { return err }
+
 	trak, err := GetBytesOf(struct {
 		Head AtomHeader
 		Tkhd []byte
 		Edts []byte
+		Mdia []byte
 	}{
-		AtomHeader{atomHeaderSize + uint32(len(tkhd) + len(edts)), trakNum},
+		AtomHeader{atomHeaderSize + uint32(len(tkhd) + len(edts) + len(mdia)), trakNum},
 		tkhd,
 		edts,
+		mdia,
 	})
 	if err != nil { return err }
 
