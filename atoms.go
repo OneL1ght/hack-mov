@@ -109,3 +109,19 @@ type Mdhd struct {
 	Language     int16   // specifies the language code for this media.
 	Quality      int16   // specifies the media’s playback quality.
 }
+
+type Stsd struct {
+	AtomHeader
+	Version     byte    // specification of the version of this sample description atom.
+	Flags       [3]byte // A 3-byte space for sample description flags.
+	NOE         int32   // containing the number of sample descriptions that follow.
+	SampleTable []SampleDescRow // An array of sample descriptions
+}
+
+type SampleDescRow struct {
+	Size         int32
+	DataFmt      int32
+	_            [6]byte
+	DataRefIndex int16
+	Description  []byte
+}

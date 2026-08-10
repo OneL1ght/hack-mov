@@ -765,12 +765,47 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	mdhd = slices.Replace(mdhd, 0, 4, mdhdSize...)
 
+	dataFmt := 0x72617720
+	txt, err := GetBytesOf("made by OneL1ght with pure Go!")
+	if err != nil { return err }
+	stsd, err := GetBytesOf(Stsd{
+		AtomHeader{0, stsdNum},
+		0,
+		[3]byte{0,0,0},
+		1,
+		[]SampleDescRow { {int32(16 + len(txt)), int32(dataFmt), [6]byte{}, 0, txt} },
+	})
+	if err != nil { return err }
+	stsdSize, err := GetBytesOf(uint32(len(stsd)))
+	if err != nil { return err }
+	stsd = slices.Replace(stsd, 0, 4, stsdSize...)
+
+	stbl, err := GetBytesOf(struct {
+		Head AtomHeader
+		Stsd []byte
+	}{
+		AtomHeader{atomHeaderSize + uint32(len(stsd)), stblNum},
+		stsd,
+	})
+	if err != nil { return err }
+
+	minf, err := GetBytesOf(struct {
+		Head AtomHeader
+		Stbl []byte
+	}{
+		AtomHeader{atomHeaderSize + uint32(len(stbl)), minfNum},
+		stbl,
+	})
+	if err != nil { return err }
+
 	mdia, err := GetBytesOf(struct {
 		Head AtomHeader
 		Mdhd []byte
+		Minf []byte
 	}{
-		AtomHeader{atomHeaderSize + uint32(len(mdhd)), mdiaNum},
+		AtomHeader{atomHeaderSize + uint32(len(mdhd) + len(minf)), mdiaNum},
 		mdhd,
+		minf,
 	})
 	if err != nil { return err }
 
