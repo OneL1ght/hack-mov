@@ -571,12 +571,10 @@ func GetBytesOfTypeValue(typ reflect.Type, val reflect.Value) ([]byte, error) {
 			b = val.Bytes()
 			break
 		}
-		elemSize := typ.Elem().Size()
-		b = unsafe.Slice((*byte)(val.UnsafePointer()), val.Len() * int(elemSize))
-		if IsLittleEndianPlatform() {
-			for i := range val.Len() {
-				slices.Reverse(b[int(elemSize) * i : int(elemSize) * (i+1)])
-			}
+		for _, elem := range val.Seq2() {
+			eb, err := GetBytesOfTypeValue(elem.Type(), elem)
+			if err != nil { return nil, err }
+			b = slices.Concat(b, eb)
 		}
 	case reflect.Array:
 		for _, elem := range val.Seq2() {
@@ -593,6 +591,15 @@ func GetBytesOfTypeValue(typ reflect.Type, val reflect.Value) ([]byte, error) {
 	case reflect.Struct:
 		b, err = GetBytesOfAtomStruct(val)
 		if err != nil { return nil, err }
+	case reflect.String:
+		sl := val.Slice(0, val.Len())
+		elemSize := 1
+		b = unsafe.Slice((*byte)(sl.UnsafePointer()), sl.Len() * int(elemSize))
+		if IsLittleEndianPlatform() {
+			for i := range sl.Len() {
+				slices.Reverse(b[int(elemSize) * i : int(elemSize) * (i+1)])
+			}
+		}
 	default:
 		return nil, errors.New(
 			"got unsupported type for bytes extracting: " + typ.Kind().String())
