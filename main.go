@@ -324,7 +324,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					skipSize = uint64(mdat.ExtendedSize)
 				}
 			case mvhdNum:
-				var mvhd MovieHeaderAtom
+				var mvhd Mvhd
 				err := getStruct(atomData, &mvhd)
 				if err != nil {
 					panic(err)
@@ -682,7 +682,7 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 func writeDemo(file *os.File) error {
 	brand, err := getUintOfFourCCStr("qt  ")
 	if err != nil { return err }
-	ftyp := Ftyp{AtomHeader{uint32(unsafe.Sizeof(Ftyp{})), ftypNum}, brand, 1, brand}
+	ftyp := Ftyp{AtomHeader{ftypSize, ftypNum}, brand, 512, brand}
 	b, err := GetBytesOf(ftyp)
 	if err != nil { return err }
 	file.Write(b)
@@ -694,19 +694,62 @@ func writeDemo(file *os.File) error {
 
 	contentSize := 1280 * 720 * 3 * 2
 	content := make([]byte, contentSize)
-	mdat := Mdat{
-		AtomHeader{
-			uint32(unsafe.Sizeof(AtomHeader{}) + unsafe.Sizeof(uint64(0)) + uintptr(contentSize)),
-			mdatNum},
-		0,
-		content,
-	}
-	b, err = GetBytesOf(mdat)
+	mdat, err := GetBytesOf(Mdat{AtomHeader{0, mdatNum}, 0, content})
 	if err != nil { return err }
-	file.Write(b)
+	mdatSize, err := GetBytesOf(uint32(len(mdat)))
+	if err != nil { return err }
+	mdat = slices.Replace(mdat, 0, 4, mdatSize...)
+	file.Write(mdat)
 
-	// moov(mvhd, trak(tkhd, edts, mdia(...)))
-	mvhd, err := GetBytesOf(MovieHeaderAtom{
+	tkhd, err := GetBytesOf(Tkhd{
+		AtomHeader{0, tkhdNum},
+		FullBox{0, [3]byte{0,0,0}},
+		0,
+		0,
+		0,
+		0,
+		2,
+		[8]byte{},
+		0,
+		0,
+		[2]int8{1, 0},
+		0,
+		[36]byte{},
+		[2]int16 {1280, 0},
+		[2]int16 {720, 0},
+	})
+	if err != nil { return err }
+	tkhdSize, err := GetBytesOf(uint32(len(tkhd)))
+	if err != nil { return err }
+	tkhd = slices.Replace(tkhd, 0, 4, tkhdSize...)
+
+	editListTable := []int32{0,1,2}
+	elstNum, err := getUintOfFourCCStr("elst")
+	if err != nil { return err }
+	elst := Elst{
+		AtomHeader{atomHeaderSize + fullBoxSize + 4 + uint32(len(editListTable))*4, elstNum},
+		FullBox{},
+		1,
+		editListTable,
+	}
+	edts, err := GetBytesOf(Edts{AtomHeader{0, edtsNum}, elst})
+	if err != nil { return err }
+	edtsSize, err := GetBytesOf(uint32(len(edts)))
+	if err != nil { return err }
+	edts = slices.Replace(edts, 0, 4, edtsSize...)
+
+	trak, err := GetBytesOf(struct {
+		Head AtomHeader
+		Tkhd []byte
+		Edts []byte
+	}{
+		AtomHeader{atomHeaderSize + uint32(len(tkhd) + len(edts)), trakNum},
+		tkhd,
+		edts,
+	})
+	if err != nil { return err }
+
+	mvhd, err := GetBytesOf(Mvhd{
 		AtomHeader{mvhdSize, mvhdNum},
 		FullBox{0, [3]byte{0,0,0}},
 		0, // CreationTime  (версия 0) или 8 байт (версия 1)
@@ -726,12 +769,18 @@ func writeDemo(file *os.File) error {
 	})
 	if err != nil { return err }
 
-	moovBytes, err := GetBytesOf(AtomHeader{atomHeaderSize + mvhdSize, moovNum})
+	moovBytes, err := GetBytesOf(struct {
+		Head AtomHeader
+		Mvhd []byte
+		Trak []byte
+	} {
+		AtomHeader{atomHeaderSize + uint32(len(mvhd) + len(trak)), moovNum},
+		mvhd,
+		trak,
+	})
 	if err != nil { return err }
 
-	moovBytes = slices.Concat(moovBytes, mvhd)
 	file.Write(moovBytes)
-
 	fmt.Println("writing end up successfully!")
 	return nil
 }

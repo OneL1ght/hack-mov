@@ -12,7 +12,7 @@ type FullBox struct {
 	Flags   [3]byte  // Флаги (3 байта)
 }
 
-type MovieHeaderAtom struct {
+type Mvhd struct {
 	AtomHeader
 	FullBox
 	CreationTime      uint32   // (версия 0) или 8 байт (версия 1)
@@ -53,13 +53,13 @@ type Tkhd struct {
 	_                int32
 	Duration         int32
 	_                [8]byte
-	Layer            int16
-	AlternateGroup   int16
+	Layer            int16 // A 16-bit integer that indicates this track’s spatial priority in its movie.
+	AlternateGroup   int16 //  identifies a collection of movie tracks that contain alternate data for one another
 	Volume           [2]int8 // fixed point int16
 	_                int16
 	MatrixStructure  [36]byte
-	TrackWidth       [2]int16 // fixed point int32
-	TrackHeight      [2]int16 // fixed point int32
+	TrackWidth       [2]int16 // fixed point int32, the width of this track in pixels
+	TrackHeight      [2]int16 // fixed point int32, the height of this track in pixels
 }
 
 type Edts struct {
@@ -67,11 +67,13 @@ type Edts struct {
 	Elst
 }
 
+// An atom that maps from a time in a movie to a time in a media,
+// and ultimately to media data.
 type Elst struct {
 	AtomHeader
 	FullBox
 	NOE           uint32
-	EditListTable []int32 // An array of 32-bit values, grouped into entries containing 3 values each.
+	EditListTable []int32 // grouped into entries containing 3 values each [trak duration, media time, media rate]
 }
 
 type Stco struct {
