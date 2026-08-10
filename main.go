@@ -49,8 +49,6 @@ const raw_Num uint32 = 0x72617720
 
 const maxListPrint = 5
 
-type fourCC = [fccSize]byte
-
 type ImgDims struct {
 	Width  int32
 	Height int32
@@ -541,8 +539,16 @@ func IsLittleEndianPlatform() bool {
 
 func GetBytesOf[T any](s T) ([]byte, error) {
 	res := make([]byte, 0)
+	srcValue := reflect.ValueOf(s)
+	kind := srcValue.Kind()
 
-	for field, val := range reflect.ValueOf(s).Fields() {
+	if kind != reflect.Struct {
+		res, err := GetBytesOfTypeValue(srcValue.Type(), srcValue)
+		if err != nil { return nil, err }
+		return res, nil
+	}
+
+	for field, val := range srcValue.Fields() {
 		b, err := GetBytesOfTypeValue(field.Type, val)
 		if err != nil { return nil, err }
 
@@ -660,9 +666,16 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 			return nil, err
 		}
 	default:
-		return nil, errors.New(
-			"got unsupported atom type for bytes extracting: " + val.Type().Kind().String())
+		for field, val := range val.Fields() {
+			cb, err := GetBytesOfTypeValue(field.Type, val)
+			if err != nil { 
+				return nil, errors.New(
+					"got unsupported atom type for bytes extracting: " + val.Type().Kind().String())
+			}
+			b = slices.Concat(b, cb)
 		}
+	}
+
 	return b, err
 }
 
