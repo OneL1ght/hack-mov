@@ -733,6 +733,25 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	tkhd = slices.Replace(tkhd, 0, 4, tkhdSize...)
 
+	hdlrNum, err := getUintOfFourCCStr("hdlr")
+	compTypeNum, err := getUintOfFourCCStr("mhlr") // or data handler 'dhlr'
+	if err != nil { return err }
+	compSybtypeNum, err := getUintOfFourCCStr("vide") // or 'soun', 'subt'
+	if err != nil { return err }
+	hdlr, err := GetBytesOf(Hdlr{
+		AtomHeader{0, hdlrNum},
+		0,
+		[3]byte{0,0,0},
+		compTypeNum,
+		compSybtypeNum,
+		[4]byte{}, [4]byte{}, [4]byte{},
+		[]byte{},
+	})
+	if err != nil { return err }
+	hdlrSize, err := GetBytesOf(uint32(len(hdlr)))
+	if err != nil { return err }
+	hdlr = slices.Replace(hdlr, 0, 4, hdlrSize...)
+
 	editListTable := []int32{0,1,2}
 	elstNum, err := getUintOfFourCCStr("elst")
 	if err != nil { return err }
@@ -801,10 +820,12 @@ func writeDemo(file *os.File) error {
 	mdia, err := GetBytesOf(struct {
 		Head AtomHeader
 		Mdhd []byte
+		Hdlr []byte
 		Minf []byte
 	}{
-		AtomHeader{atomHeaderSize + uint32(len(mdhd) + len(minf)), mdiaNum},
+		AtomHeader{atomHeaderSize + uint32(len(mdhd) + len(minf) + len(hdlr)), mdiaNum},
 		mdhd,
+		hdlr,
 		minf,
 	})
 	if err != nil { return err }

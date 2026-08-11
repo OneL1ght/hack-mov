@@ -125,3 +125,15 @@ type SampleDescRow struct {
 	DataRefIndex int16
 	Description  []byte
 }
+
+type Hdlr struct {
+	AtomHeader
+	Version          byte    // specification of the version of this handler information.
+	Flags            [3]byte // space for handler information flags.
+	ComponentType    uint32  // fourcc that identifies the type of the handler.
+	ComponentSubtype uint32  // fourcc that identifies the type of the media handler or data handler.
+	_                [4]byte // Reserved.
+	_                [4]byte // Reserved.
+	_                [4]byte // Reserved.
+	ComponentName    []byte  // A counted string that specifies the name of the component — that is, the media handler used when this media was created.
+}
