@@ -48,6 +48,7 @@ const stscNum uint32 = 0x73747363 // sample to chunk
 const mp4aNum uint32 = 0x6d703461
 const raw_Num uint32 = 0x72617720
 const mdhdNum uint32 = 0x6d646864
+const dinfNum uint32 = 0x64696e66
 
 const maxListPrint = 5
 
@@ -410,6 +411,14 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				printWithIndent(fmt.Sprintf("%v", edts), dopInfoIndent)
 				for i := range edts.Elst.EditListTable {
 					printWithIndent(fmt.Sprintf("edit val: %v", i), dopInfoIndent)
+				}
+			case dinfNum:
+				dref := content[(atomHeaderSize + 16):skipSize]
+				for i := 0; i < len(dref); {
+					var sz int32
+					binary.Read(bytes.NewReader(dref[i:i+4]), binary.BigEndian, &sz)
+					printWithIndent(fmt.Sprintf("t: %s, s: %v, data: %v", dref[i+4:i+8], sz, dref[i+12:sz]), dopInfoIndent)
+					i += int(sz)
 				}
 			}
 		}
