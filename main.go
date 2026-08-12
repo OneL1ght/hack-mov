@@ -222,9 +222,8 @@ func getStsc(data []byte) (*Stsc, error) {
 
 	sample2ChunkSize := len(data[16:header.Size]) / 12
 	res = &Stsc{
-		Size: header.Size,
-		Type: header.Type,
-		Version: data[8],
+		AtomHeader: header,
+		FullBox: FullBox{data[8], [3]byte{0,0,0}},
 		Sample2Chunk: make([]SampleChunkRow, sample2ChunkSize),
 	}
 
@@ -740,8 +739,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	hdlr, err := GetBytesOf(Hdlr{
 		AtomHeader{0, hdlrNum},
-		0,
-		[3]byte{0,0,0},
+		FullBox{0, [3]byte{0,0,0}},
 		compTypeNum,
 		compSybtypeNum,
 		[4]byte{}, [4]byte{}, [4]byte{},
@@ -770,8 +768,7 @@ func writeDemo(file *os.File) error {
 	tm := int32(time.Since(time.Date(1904, 1, 1, 12, 0, 0, 0, time.Local)).Seconds()) // its not valid!
 	mdhd, err := GetBytesOf(Mdhd{
 		AtomHeader{0, mdhdNum},
-		1,
-		[3]byte{0,0,1},
+		FullBox{1, [3]byte{0,0,1}},
 		tm,
 		tm,
 		1,
@@ -789,8 +786,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	stsd, err := GetBytesOf(Stsd{
 		AtomHeader{0, stsdNum},
-		0,
-		[3]byte{0,0,0},
+		FullBox{0, [3]byte{0,0,0}},
 		1,
 		[]SampleDescRow { {int32(16 + len(txt)), int32(dataFmt), [6]byte{}, 0, txt} },
 	})

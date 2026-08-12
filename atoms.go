@@ -84,10 +84,8 @@ type Stco struct {
 }
 
 type Stsc struct {
-	Size         uint32
-	Type         uint32
-	Version      byte
-	Flags        [3]byte
+	AtomHeader
+	FullBox
 	NOE          uint32
 	Sample2Chunk []SampleChunkRow
 }
@@ -100,8 +98,7 @@ type SampleChunkRow struct {
 
 type Mdhd struct {
 	AtomHeader
-	Version      byte    // One byte that specifies the version of this header atom.
-	Flags        [3]byte // Three bytes of space for media header flags.
+	FullBox // One byte that specifies the version of this header atom, Three bytes of space for media header flags.
 	CreationTime int32   // specifies the creation date for the media atom.
 	Modification int32   // specifies the last modification date for the media atom.
 	TimeScale    int32   // scale A time value that indicates the time scale for this media.
@@ -112,8 +109,7 @@ type Mdhd struct {
 
 type Stsd struct {
 	AtomHeader
-	Version     byte    // specification of the version of this sample description atom.
-	Flags       [3]byte // A 3-byte space for sample description flags.
+	FullBox // specification of the version of this sample description atom, A 3-byte space for sample description flags.
 	NOE         int32   // containing the number of sample descriptions that follow.
 	SampleTable []SampleDescRow // An array of sample descriptions
 }
@@ -128,8 +124,7 @@ type SampleDescRow struct {
 
 type Hdlr struct {
 	AtomHeader
-	Version          byte    // specification of the version of this handler information.
-	Flags            [3]byte // space for handler information flags.
+	FullBox // specification of the version of this handler information, space for handler information flags.
 	ComponentType    uint32  // fourcc that identifies the type of the handler.
 	ComponentSubtype uint32  // fourcc that identifies the type of the media handler or data handler.
 	_                [4]byte // Reserved.
