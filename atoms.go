@@ -80,7 +80,7 @@ type Stco struct {
 	AtomHeader
 	FullBox
 	NOE          uint32
-	ChunkOffsets []int32 // offsets list in chunks order [o1, o2..], meand [ch1, ch2..]
+	ChunkOffsets []int32 // offsets list in chunks order [o1, o2..], means [ch1, ch2..]
 }
 
 type Stsc struct {

@@ -792,12 +792,26 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	stsd = slices.Replace(stsd, 0, 4, stsdSize...)
 
+	firstOffset := int32(len(ftyp) + len(wide) + int(atomHeaderSize))
+	stco, err := GetBytesOf(Stco{
+		AtomHeader{0, stcoNum},
+		FullBox{0, [3]byte{0,0,0}},
+		1,
+		[]int32{firstOffset, firstOffset + int32(1280*720*3)},
+	})
+	if err != nil { return err }
+	stcoSize, err := GetBytesOf(uint32(len(stco)))
+	if err != nil { return err }
+	stco = slices.Replace(stco, 0, 4, stcoSize...)
+
 	stbl, err := GetBytesOf(struct {
 		Head AtomHeader
 		Stsd []byte
+		Stco []byte
 	}{
 		AtomHeader{atomHeaderSize + uint32(len(stsd)), stblNum},
 		stsd,
+		stco,
 	})
 	if err != nil { return err }
 
