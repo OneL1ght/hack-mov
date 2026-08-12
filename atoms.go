@@ -132,3 +132,10 @@ type Hdlr struct {
 	_                [4]byte // Reserved.
 	ComponentName    []byte  // A counted string that specifies the name of the component — that is, the media handler used when this media was created.
 }
+
+type Vmhd struct {
+	AtomHeader
+	FullBox
+	GraphicsMode int16
+	Opcolor      [3]int16 // rgb for transfer mode orientation
+}

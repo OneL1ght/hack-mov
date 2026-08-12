@@ -25,7 +25,6 @@ var parentsAtoms []uint32 = []uint32{moovNum, udtaNum, trakNum, mdiaNum, minfNum
 var atomHeaderSize uint32 = 8
 var fullBoxSize uint32 = 4
 var ftypSize uint32 = 20
-var mvhdSize uint32 = 98
 
 const russLangCode int16 = 32
 const fccSize uint = 4
@@ -804,11 +803,25 @@ func writeDemo(file *os.File) error {
 	})
 	if err != nil { return err }
 
+	vmhdNum, err := getUintOfFourCCStr("vmhd")
+	if err != nil { return err }
+	vmhd, err := GetBytesOf(Vmhd{
+		AtomHeader{0, vmhdNum},
+		FullBox{0, [3]byte{0,0,0}},
+		0, [3]int16{0, 0, 0},
+	})
+	if err != nil { return err }
+	vmhdSize, err := GetBytesOf(uint32(len(vmhd)))
+	if err != nil { return err }
+	vmhd = slices.Replace(vmhd, 0, 4, vmhdSize...)
+
 	minf, err := GetBytesOf(struct {
 		Head AtomHeader
+		Vmhd []byte
 		Stbl []byte
 	}{
-		AtomHeader{atomHeaderSize + uint32(len(stbl)), minfNum},
+		AtomHeader{atomHeaderSize + uint32(len(stbl) + len(vmhd)), minfNum},
+		vmhd,
 		stbl,
 	})
 	if err != nil { return err }
@@ -840,7 +853,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 
 	mvhd, err := GetBytesOf(Mvhd{
-		AtomHeader{mvhdSize, mvhdNum},
+		AtomHeader{0, mvhdNum},
 		FullBox{0, [3]byte{0,0,0}},
 		0, // CreationTime  (версия 0) или 8 байт (версия 1)
 		0, // ModificationTime  (версия 0) или 8 байт (версия 1)
@@ -858,6 +871,9 @@ func writeDemo(file *os.File) error {
 		1, // NextTrackID  - следующий доступный ID трека
 	})
 	if err != nil { return err }
+	mvhdSize, err := GetBytesOf(uint32(len(mvhd)))
+	if err != nil { return err }
+	mvhd = slices.Replace(mvhd, 0, 4, mvhdSize...)
 
 	moovBytes, err := GetBytesOf(struct {
 		Head AtomHeader
