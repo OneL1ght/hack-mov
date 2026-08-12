@@ -690,15 +690,13 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 func writeDemo(file *os.File) error {
 	brand, err := getUintOfFourCCStr("qt  ")
 	if err != nil { return err }
-	ftyp := Ftyp{AtomHeader{ftypSize, ftypNum}, brand, 512, brand}
-	b, err := GetBytesOf(ftyp)
+	ftyp, err := GetBytesOf(Ftyp{AtomHeader{ftypSize, ftypNum}, brand, 512, brand})
 	if err != nil { return err }
-	file.Write(b)
+	file.Write(ftyp)
 
-	wide := AtomHeader{8, wideNum}
-	b, err = GetBytesOf(wide)
+	wide, err := GetBytesOf(AtomHeader{8, wideNum})
 	if err != nil { return err }
-	file.Write(b)
+	file.Write(wide)
 
 	contentSize := 1280 * 720 * 3 * 2
 	content := make([]byte, contentSize)
