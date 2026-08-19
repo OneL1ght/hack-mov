@@ -752,17 +752,18 @@ func writeDemo(file *os.File) error {
 	tkhd = slices.Replace(tkhd, 0, 4, tkhdSize...)
 
 	hdlrNum, err := getUintOfFourCCStr("hdlr")
-	compTypeNum, err := getUintOfFourCCStr("mhlr") // or data handler 'dhlr'
+	compTypeNum, err := getUintOfFourCCStr("mhlr")
 	if err != nil { return err }
 	compSybtypeNum, err := getUintOfFourCCStr("vide") // or 'soun', 'subt'
 	if err != nil { return err }
+	compName, err := GetBytesOf("\012VideoHandler")
 	hdlr, err := GetBytesOf(Hdlr{
 		AtomHeader{0, hdlrNum},
 		FullBox{0, [3]byte{0,0,0}},
 		compTypeNum,
 		compSybtypeNum,
 		[4]byte{}, [4]byte{}, [4]byte{},
-		[]byte{},
+		compName,
 	})
 	if err != nil { return err }
 	hdlrSize, err := GetBytesOf(uint32(len(hdlr)))
@@ -896,13 +897,33 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	vmhd = slices.Replace(vmhd, 0, 4, vmhdSize...)
 
+	compTypeNum, err = getUintOfFourCCStr("dhlr")
+	if err != nil { return err }
+	compSybtypeNum, err = getUintOfFourCCStr("url ")
+	if err != nil { return err }
+	compName, err = GetBytesOf("\011DataHandler")
+	minfHdlr, err := GetBytesOf(Hdlr{
+		AtomHeader{0, hdlrNum},
+		FullBox{0, [3]byte{0,0,0}},
+		compTypeNum,
+		compSybtypeNum,
+		[4]byte{}, [4]byte{}, [4]byte{},
+		compName,
+	})
+	if err != nil { return err }
+	minfHdlrSize, err := GetBytesOf(uint32(len(minfHdlr)))
+	if err != nil { return err }
+	minfHdlr = slices.Replace(minfHdlr, 0, 4, minfHdlrSize...)
+
 	minf, err := GetBytesOf(struct {
 		Head AtomHeader
 		Vmhd []byte
+		Hdlr []byte
 		Stbl []byte
 	}{
-		AtomHeader{atomHeaderSize + uint32(len(stbl) + len(vmhd)), minfNum},
+		AtomHeader{atomHeaderSize + uint32(len(stbl) + len(vmhd) + len(minfHdlr)), minfNum},
 		vmhd,
+		minfHdlr,
 		stbl,
 	})
 	if err != nil { return err }
