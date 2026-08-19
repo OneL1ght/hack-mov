@@ -83,6 +83,16 @@ type Stco struct {
 	ChunkOffsets []int32 // offsets list in chunks order [o1, o2..], means [ch1, ch2..]
 }
 
+// stores duration information for a media’s samples, providing
+// a mapping from a time in a media to the corresponding data sample
+type Stts struct {
+	AtomHeader
+	FullBox
+	NOE int32
+	Time2Sample []int32 // table with 2 int32 values in raw [['sample count', 'sample duration'],...]
+}
+
+// stores chunk information for the samples in a media
 type Stsc struct {
 	AtomHeader
 	FullBox
@@ -94,6 +104,14 @@ type SampleChunkRow struct {
 	First int32
 	SpC   int32 // sample per chunk
 	Id    int32
+}
+
+// to specify the size of each sample in the media
+type Stsz struct {
+	AtomHeader
+	FullBox
+	NOE          uint32
+	SampleSizeTable []int32 // ['sizeInBytesSample1', 'sizeInBytesSample2', ...]
 }
 
 type Mdhd struct {

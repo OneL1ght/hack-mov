@@ -707,7 +707,10 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	file.Write(wide)
 
-	contentSize := 1280 * 720 * 3 * 2
+	oneFrameSize := int32(1280*720*3)
+	timeScale := int32(1000)
+	durationSec := int32(2)
+	contentSize := oneFrameSize * durationSec
 	content := make([]byte, contentSize)
 	mdat, err := GetBytesOf(Mdat{AtomHeader{0, mdatNum}, 0, content})
 	if err != nil { return err }
@@ -777,8 +780,8 @@ func writeDemo(file *os.File) error {
 		FullBox{1, [3]byte{0,0,1}},
 		tm,
 		tm,
-		1,
-		2,
+		timeScale,
+		durationSec * timeScale,
 		russLangCode,
 		1,
 	}) 
@@ -788,13 +791,15 @@ func writeDemo(file *os.File) error {
 	mdhd = slices.Replace(mdhd, 0, 4, mdhdSize...)
 
 	dataFmt := 0x72617720
-	txt, err := GetBytesOf("made by OneL1ght with pure Go!")
+	videNum, err := getUintOfFourCCStr("vide")
+	if err != nil { return err }
+	txt, err := GetBytesOf(videNum) // TODO: normal meta info
 	if err != nil { return err }
 	stsd, err := GetBytesOf(Stsd{
 		AtomHeader{0, stsdNum},
 		FullBox{0, [3]byte{0,0,0}},
 		1,
-		[]SampleDescRow { {int32(16 + len(txt)), int32(dataFmt), [6]byte{}, 0, txt} },
+		[]SampleDescRow { {int32(16 + len(txt)), int32(dataFmt), [6]byte{}, 1, txt} },
 	})
 	if err != nil { return err }
 	stsdSize, err := GetBytesOf(uint32(len(stsd)))
@@ -806,20 +811,65 @@ func writeDemo(file *os.File) error {
 		AtomHeader{0, stcoNum},
 		FullBox{0, [3]byte{0,0,0}},
 		1,
-		[]int32{firstOffset, firstOffset + int32(1280*720*3)},
+		[]int32{firstOffset, firstOffset + oneFrameSize},
 	})
 	if err != nil { return err }
 	stcoSize, err := GetBytesOf(uint32(len(stco)))
 	if err != nil { return err }
 	stco = slices.Replace(stco, 0, 4, stcoSize...)
 
+	sttsNum, err := getUintOfFourCCStr("stts")
+	if err != nil { return err }
+	stts, err := GetBytesOf(Stts{
+		AtomHeader{0, sttsNum},
+		FullBox{0, [3]byte{0,0,0}},
+		1,
+		[]int32{2, timeScale},
+	})
+	if err != nil { return err }
+	sttsSize, err := GetBytesOf(uint32(len(stts)))
+	if err != nil { return err }
+	stts = slices.Replace(stts, 0, 4, sttsSize...)
+
+	stscNum, err := getUintOfFourCCStr("stsc")
+	if err != nil { return err }
+	stsc, err := GetBytesOf(Stsc{
+		AtomHeader{0, stscNum},
+		FullBox{0, [3]byte{0,0,0}},
+		1,
+		[]SampleChunkRow{ {1, 1, 1}, },
+	})
+	if err != nil { return err }
+	stscSize, err := GetBytesOf(uint32(len(stsc)))
+	if err != nil { return err }
+	stsc = slices.Replace(stsc, 0, 4, stscSize...)
+
+	stszNum, err := getUintOfFourCCStr("stsz")
+	if err != nil { return err }
+	stsz, err := GetBytesOf(Stsz{
+		AtomHeader{0, stszNum},
+		FullBox{0, [3]byte{0,0,0}},
+		1,
+		[]int32{ oneFrameSize, oneFrameSize },
+	})
+	if err != nil { return err }
+	stszSize, err := GetBytesOf(uint32(len(stsz)))
+	if err != nil { return err }
+	stsz = slices.Replace(stsz, 0, 4, stszSize...)
+
 	stbl, err := GetBytesOf(struct {
 		Head AtomHeader
 		Stsd []byte
+		Stts []byte
+		Stsc []byte
+		Stsz []byte
 		Stco []byte
 	}{
 		AtomHeader{atomHeaderSize + uint32(len(stsd)), stblNum},
 		stsd,
+		stts,
+		stsc,
+		stsz,
 		stco,
 	})
 	if err != nil { return err }
@@ -878,8 +928,8 @@ func writeDemo(file *os.File) error {
 		FullBox{0, [3]byte{0,0,0}},
 		0, // CreationTime  (версия 0) или 8 байт (версия 1)
 		0, // ModificationTime  (версия 0) или 8 байт (версия 1)
-		1, // TimeScale  временная шкала в тиках/секунду
-		2, // Duration  (версия 0) или 8 байт (версия 1)
+		uint32(timeScale), // TimeScale  временная шкала в тиках/секунду
+		uint32(durationSec * timeScale), // Duration  (версия 0) или 8 байт (версия 1)
 		0x00010000, // PreferredRate  16.16 фиксированная точка (1.0 = 0x00010000)
 		0x0100, // PreferredVolume  8.8 фиксированная точка (1.0 = 0x0100)
 		[9]int32{1,0,0,0,1,0,0,0,1}, // Matrix  матрица преобразования 3x3
@@ -887,7 +937,7 @@ func writeDemo(file *os.File) error {
 		0, // PreviewDuration
 		0, // PosterTime
 		0, // SelectionTime
-		0, // SelectionDuration
+		2, // SelectionDuration
 		0, // CurrentTime
 		1, // NextTrackID  - следующий доступный ID трека
 	})
