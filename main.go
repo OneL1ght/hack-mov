@@ -49,6 +49,7 @@ const mp4aNum uint32 = 0x6d703461
 const raw_Num uint32 = 0x72617720
 const mdhdNum uint32 = 0x6d646864
 const dinfNum uint32 = 0x64696e66
+const hdlrNum uint32 = 0x68646c72
 
 const maxListPrint = 5
 
@@ -325,6 +326,18 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				if skipSize == 1 {
 					skipSize = uint64(mdat.ExtendedSize)
 				}
+			case hdlrNum:
+				compType, err := GetBytesOf(content[12:16])
+				if err != nil { return }
+				compSubType, err := GetBytesOf(content[16:20])
+				if err != nil { return }
+				compName, err := GetBytesOf(content[32:skipSize])
+				if err != nil { return }
+
+				printWithIndent(
+					fmt.Sprintf("compType: %s, compSubType: %s, compName: %s",
+						compType, compSubType, underscoreSpecials(string(compName))),
+					dopInfoIndent)
 			case mvhdNum:
 				var mvhd Mvhd
 				err := getStruct(atomData, &mvhd)
@@ -531,9 +544,6 @@ func exportFrames(data []byte, dir string, ) error {
 
 func underscoreSpecials(s string) string {
 	f := func(r rune) rune {
-		if unicode.IsSpace(r) && r != '\n' && r != '\r' {
-			return '_'
-		}
 		if unicode.IsDigit(r) || unicode.IsLetter(r) || unicode.IsPunct(r) {
 			return r
 		}
