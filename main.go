@@ -1025,7 +1025,7 @@ func writeDemo(file *os.File) error {
 		uint32(durationSec * timeScale), // Duration  (версия 0) или 8 байт (версия 1)
 		0x00010000, // PreferredRate  16.16 фиксированная точка (1.0 = 0x00010000)
 		0x0100, // PreferredVolume  8.8 фиксированная точка (1.0 = 0x0100)
-		[9]int32{1,0,0,0,1,0,0,0,1}, // Matrix  матрица преобразования 3x3
+		[9]int32{0,0,1,0,0,0,1,0,0}, // Matrix  матрица преобразования 3x3
 		0, // PreviewTime
 		0, // PreviewDuration
 		0, // PosterTime
