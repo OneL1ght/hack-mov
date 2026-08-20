@@ -195,9 +195,10 @@ func getEdts(data []byte) (*Edts, error) {
 	}
 
 	elstEditList := make([]int32, 0)
-	for i := 0; i < len(elstData[16:]); i += 4 {
+	tableData := elstData[16:]
+	for i := 0; i < len(tableData); i += 4 {
 		var v int32
-		err = binary.Read(bytes.NewReader(elstData[i:i+4]), binary.BigEndian, &v)
+		err = binary.Read(bytes.NewReader(tableData[i:i+4]), binary.BigEndian, &v)
 		if err != nil {
 			return nil, fmt.Errorf("could not read value in EditList: %v", err)
 		}
@@ -468,10 +469,22 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					printWithIndent(fmt.Sprintf("%v", err), indent)
 					return
 				}
-				printWithIndent(fmt.Sprintf("%v", edts), dopInfoIndent)
-				for i := range edts.Elst.EditListTable {
-					printWithIndent(fmt.Sprintf("edit val: %v", i), dopInfoIndent)
-				}
+				printWithIndent(fmt.Sprintf("noe: %v", edts.Elst.NOE), dopInfoIndent)
+				table := edts.Elst.EditListTable
+				count := len(table) / 3
+				if count > 0 {
+					for i := range min(maxListPrint, count) {
+						tdur  := table[i*3]
+						mtime := table[i*3 + 1]
+						mrate := table[i*3 + 2] / int32(math.Pow(2, 16))
+						printWithIndent(
+							fmt.Sprintf("trak dur: %v media time: %v, media rate: %v", tdur, mtime, mrate),
+							dopInfoIndent)
+					}
+					if count > maxListPrint {
+						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
+					}
+				} else { printWithIndent("Warning: there was no values!", dopInfoIndent)}
 			case dinfNum:
 				dref := content[(atomHeaderSize + 16):skipSize]
 				for i := 0; i < len(dref); {
