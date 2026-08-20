@@ -366,6 +366,15 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				printWithIndent(
 					fmt.Sprintf("duration: %fs, timeScale: %d, matrix: %v", durationSec, mvhd.TimeScale, mvhd.Matrix),
 					dopInfoIndent)
+			case mdhdNum:
+				var mdhd Mdhd
+				err := binary.Read(bytes.NewReader(content), binary.BigEndian, &mdhd)
+				if err != nil { panic(err) }
+				printWithIndent(
+					fmt.Sprintf(
+						"creat time: %v, mod date: %v, ts: %v, dur: %v, lang: %v, qual: %v",
+						mdhd.CreationTime, mdhd.Modification, mdhd.TimeScale, mdhd.Duration, mdhd.Language, mdhd.Quality),
+					dopInfoIndent)
 			case _swrNum:
 				sgi := content[8:skipSize]
 				sgiTxt := underscoreSpecials(string(sgi))
