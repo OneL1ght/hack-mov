@@ -110,8 +110,9 @@ type SampleChunkRow struct {
 type Stsz struct {
 	AtomHeader
 	FullBox
-	NOE          uint32
-	SampleSizeTable []int32 // ['sizeInBytesSample1', 'sizeInBytesSample2', ...]
+	SampleSize uint32
+	NOE        uint32
+	SampleSizeTable []uint32 // ['sizeInBytesSample1', 'sizeInBytesSample2', ...]
 }
 
 type Mdhd struct {

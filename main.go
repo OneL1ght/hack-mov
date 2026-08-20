@@ -50,6 +50,7 @@ const raw_Num uint32 = 0x72617720
 const mdhdNum uint32 = 0x6d646864
 const dinfNum uint32 = 0x64696e66
 const hdlrNum uint32 = 0x68646c72
+const stszNum uint32 = 0x7374737a
 
 const maxListPrint = 5
 
@@ -718,9 +719,10 @@ func writeDemo(file *os.File) error {
 	file.Write(wide)
 
 	oneFrameSize := int32(1280*720*3)
+	totalFrames := int32(2)
 	timeScale := int32(1000)
 	durationSec := int32(2)
-	contentSize := oneFrameSize * durationSec
+	contentSize := oneFrameSize * totalFrames
 	content := make([]byte, contentSize)
 	mdat, err := GetBytesOf(Mdat{AtomHeader{0, mdatNum}, 0, content})
 	if err != nil { return err }
@@ -736,7 +738,7 @@ func writeDemo(file *os.File) error {
 		0,
 		0,
 		0,
-		2,
+		durationSec,
 		[8]byte{},
 		0,
 		0,
@@ -855,13 +857,12 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	stsc = slices.Replace(stsc, 0, 4, stscSize...)
 
-	stszNum, err := getUintOfFourCCStr("stsz")
-	if err != nil { return err }
 	stsz, err := GetBytesOf(Stsz{
 		AtomHeader{0, stszNum},
 		FullBox{0, [3]byte{0,0,0}},
-		1,
-		[]int32{ oneFrameSize, oneFrameSize },
+		uint32(oneFrameSize),
+		uint32(totalFrames),
+		[]uint32 {}, // because all sample have same size
 	})
 	if err != nil { return err }
 	stszSize, err := GetBytesOf(uint32(len(stsz)))
