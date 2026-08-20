@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math"
 	"path"
 	"reflect"
 	"slices"
@@ -327,6 +328,15 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				if skipSize == 1 {
 					skipSize = uint64(mdat.ExtendedSize)
 				}
+			case tkhdNum:
+				var w, h int32; var vol int16
+				binary.Read(bytes.NewReader(atomData[84:88]), binary.BigEndian, &w)
+				binary.Read(bytes.NewReader(atomData[88:92]), binary.BigEndian, &h)
+				binary.Read(bytes.NewReader(atomData[44:46]), binary.BigEndian, &vol)
+				w /= int32(math.Pow(2, 16))
+				h /= int32(math.Pow(2, 16))
+				vol /= int16(math.Pow(2, 8))
+				printWithIndent(fmt.Sprintf("w: %v, h: %v, volume: %v", w, h, vol), dopInfoIndent)
 			case hdlrNum:
 				compType, err := GetBytesOf(content[12:16])
 				if err != nil { return }
@@ -758,13 +768,13 @@ func writeDemo(file *os.File) error {
 		0,
 		durationSec,
 		[8]byte{},
+		1,
 		0,
 		0,
-		[2]int8{1, 0},
 		0,
 		[36]byte{},
-		[2]int16 {1280, 0},
-		[2]int16 {720, 0},
+		int32(int32(w) * int32(math.Pow(2, 16))),
+		int32(int32(h) * int32(math.Pow(2, 16))),
 	})
 	if err != nil { return err }
 	tkhdSize, err := GetBytesOf(uint32(len(tkhd)))

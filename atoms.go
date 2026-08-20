@@ -55,11 +55,11 @@ type Tkhd struct {
 	_                [8]byte
 	Layer            int16 // A 16-bit integer that indicates this track’s spatial priority in its movie.
 	AlternateGroup   int16 //  identifies a collection of movie tracks that contain alternate data for one another
-	Volume           [2]int8 // fixed point int16
+	Volume           int16 // fixed point int16
 	_                int16
 	MatrixStructure  [36]byte
-	TrackWidth       [2]int16 // fixed point int32, the width of this track in pixels
-	TrackHeight      [2]int16 // fixed point int32, the height of this track in pixels
+	TrackWidth       int32 // fixed point int32, the width of this track in pixels
+	TrackHeight      int32 // fixed point int32, the height of this track in pixels
 }
 
 type Edts struct {
