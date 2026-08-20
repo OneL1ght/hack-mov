@@ -52,6 +52,7 @@ const mdhdNum uint32 = 0x6d646864
 const dinfNum uint32 = 0x64696e66
 const hdlrNum uint32 = 0x68646c72
 const stszNum uint32 = 0x7374737a
+const sttsNum uint32 = 0x73747473
 
 const maxListPrint = 5
 
@@ -391,6 +392,25 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					printWithIndent(fmt.Sprintf("tail txt: %s", tail), dopInfoIndent)
 
 					i += int(sampleSize)
+				}
+			case sttsNum:
+				var noe uint32
+				binary.Read(bytes.NewReader(atomData[12:16]), binary.BigEndian, &noe)
+				printWithIndent(fmt.Sprintf("noe: %v", noe), dopInfoIndent)
+				time2Sample := atomData[16:]
+				count := len(time2Sample) / 8
+				if count > 0 {
+					for i := range min(maxListPrint, count) {
+						var sampleCount, sampleDur int32
+						binary.Read(bytes.NewReader(time2Sample[i*8:(i+1)*8]), binary.BigEndian, &sampleCount)
+						binary.Read(bytes.NewReader(time2Sample[(i*8 + 4):((i+1)*8 + 4)]), binary.BigEndian, &sampleDur)
+						printWithIndent(
+							fmt.Sprintf("count: %v, dur: %v", sampleCount, sampleDur),
+							dopInfoIndent)
+					}
+					if count > maxListPrint {
+						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
+					}
 				}
 			case stscNum:
 				stsc, err := getStsc(atomData)
