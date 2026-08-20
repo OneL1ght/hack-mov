@@ -833,7 +833,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	hdlr = slices.Replace(hdlr, 0, 4, hdlrSize...)
 
-	editListTable := []int32{0,1,2}
+	editListTable := []int32{totalFrames * timeScale, 0, 1 * int32(math.Pow(2, 16))}
 	elstNum, err := getUintOfFourCCStr("elst")
 	if err != nil { return err }
 	elst := Elst{
