@@ -734,8 +734,10 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	file.Write(wide)
 
-	oneFrameSize := int32(1280*720*3)
+	h := 720
+	w := 1280
 	totalFrames := int32(2)
+	oneFrameSize := int32(w*h*3)
 	timeScale := int32(1000)
 	durationSec := int32(2)
 	contentSize := oneFrameSize * totalFrames
@@ -774,7 +776,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	compSybtypeNum, err := getUintOfFourCCStr("vide") // or 'soun', 'subt'
 	if err != nil { return err }
-	compName, err := GetBytesOf("\012VideoHandler")
+	compName, err := GetBytesOf("\011VideoHandler")
 	hdlr, err := GetBytesOf(Hdlr{
 		AtomHeader{0, hdlrNum},
 		FullBox{0, [3]byte{0,0,0}},
