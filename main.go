@@ -400,6 +400,22 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
 					}
 				}
+			case stszNum:
+				var sampleSize, noe uint32
+				binary.Read(bytes.NewReader(atomData[12:16]), binary.BigEndian, &sampleSize)
+				binary.Read(bytes.NewReader(atomData[16:20]), binary.BigEndian, &noe)
+				sizesData := atomData[20:skipSize]
+				printWithIndent(fmt.Sprintf("sample size: %v, noe: %v", sampleSize, noe), dopInfoIndent)
+				if len(sizesData) > 0 {
+					for i := range min(maxListPrint, len(sizesData) / 4) {
+						var sz uint32
+						binary.Read(bytes.NewReader(sizesData[i*4:(i+1)*4]), binary.BigEndian, &sz)
+						printWithIndent(fmt.Sprintf("%d sample size: %v", i, sz), dopInfoIndent)
+					}
+					if noe > maxListPrint {
+						printWithIndent(fmt.Sprintf("... and + %v lines", noe - maxListPrint), dopInfoIndent)
+					}
+				}
 			case stcoNum:
 				stco, err := getStco(atomData)
 				if err != nil {
