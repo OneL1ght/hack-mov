@@ -14,7 +14,6 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"time"
 	"unicode"
 	"unsafe"
 
@@ -430,9 +429,9 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 						comprnameb, err := GetBytesOf(desc.CompressorName)
 						if err != nil { panic(err) }
 						printWithIndent(
-							fmt.Sprintf("s: %v, dfmt: %v, w: %v, h: %v, vendor: %v, comp-r name: %v, colorId: %v",
+							fmt.Sprintf("s: %v, dfmt: %v, w: %v, h: %v, vendor: %v, comp-r name: %v, colorId: %v, dsize: %v",
 								desc.SampleDescriptionSize, uint32ToString(uint32(desc.DataFormat)),
-								desc.Width, desc.Height, uint32ToString(uint32(desc.Vendor)), string(comprnameb), desc.ColorTableID),
+								desc.Width, desc.Height, uint32ToString(uint32(desc.Vendor)), string(comprnameb), desc.ColorTableID, desc.DataSize),
 							dopInfoIndent)
 						if int32(head.Size) > videoSampleDescSize {
 							printAtoms(table[videoSampleDescSize:], indent+4, ainfo)
@@ -903,29 +902,75 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	edts = slices.Replace(edts, 0, 4, edtsSize...)
 
-	tm := int32(time.Since(time.Date(1904, 1, 1, 12, 0, 0, 0, time.Local)).Seconds()) // its not valid!
 	mdhd, err := GetBytesOf(Mdhd{
 		AtomHeader{0, mdhdNum},
-		FullBox{1, [3]byte{0,0,1}},
-		tm,
-		tm,
+		FullBox{1, [3]byte{0,0,0}},
+		0,
+		0,
 		timeScale,
 		durationSec * timeScale,
-		russLangCode,
-		1,
+		32767, // from example video
+		0,
 	}) 
 	if err != nil { return err }
 	mdhdSize, err := GetBytesOf(uint32(len(mdhd)))
 	if err != nil { return err }
 	mdhd = slices.Replace(mdhd, 0, 4, mdhdSize...)
 
-	txt := []byte { } // TODO: normal meta info
+	meta := []byte{}
+	videoSampleDesc, err := GetBytesOf(VideoSampleDescription{
+		0,
+		int32(raw_Num),
+		[6]byte{},
+		1,
+		1,
+		1,
+		int32(getUintOfFourCCStr("FFMP")),
+		1,
+		1,
+		int16(w), int16(h),
+		72, 72,
+		0,
+		1,
+		[32]byte{22,76,97,118,99,54,50,46,49,49,46,49,48,48,32,114,97,119,118,105,100,101,111,0,0,0,0,0,0,0,0,0}, // from example video
+		24,
+		1,
+	})
+	if err != nil { return err }
+	videoSampleDescSize, err := GetBytesOf(uint32(len(videoSampleDesc)))
+	if err != nil { return err }
+	videoSampleDesc = slices.Replace(videoSampleDesc, 0, 4, videoSampleDescSize...)
+	meta = slices.Concat(meta, videoSampleDesc)
+
+	colr, err := GetBytesOf(Colr{
+		AtomHeader{0, colrNum},
+		getUintOfFourCCStr("nclc"),
+		1,
+		1,
+		0,
+	})
+	if err != nil { return err }
+	colrSize, err := GetBytesOf(uint32(len(colr)))
+	if err != nil { return err }
+	colr = slices.Replace(colr, 0, 4, colrSize...)
+	meta = slices.Concat(meta, colr)
+
+	pasp, err := GetBytesOf(Pasp{
+		AtomHeader{0, paspNum},
+		1, 1,
+	})
+	if err != nil { return err }
+	paspSize, err := GetBytesOf(uint32(len(pasp)))
+	if err != nil { return err }
+	pasp = slices.Replace(pasp, 0, 4, paspSize...)
+	meta = slices.Concat(meta, pasp)
+
 	if err != nil { return err }
 	stsd, err := GetBytesOf(Stsd{
 		AtomHeader{0, stsdNum},
 		FullBox{0, [3]byte{0,0,0}},
 		1,
-		txt,
+		meta,
 	})
 	if err != nil { return err }
 	stsdSize, err := GetBytesOf(uint32(len(stsd)))
@@ -949,7 +994,8 @@ func writeDemo(file *os.File) error {
 		AtomHeader{0, sttsNum},
 		FullBox{0, [3]byte{0,0,0}},
 		1,
-		[]int32{2, timeScale},
+		// it gives 1 fps as mentioned, but idk why..
+		[]int32{totalFrames, totalFrames * timeScale * 1000000},
 	})
 	if err != nil { return err }
 	sttsSize, err := GetBytesOf(uint32(len(stts)))
@@ -988,7 +1034,7 @@ func writeDemo(file *os.File) error {
 		Stsz []byte
 		Stco []byte
 	}{
-		AtomHeader{atomHeaderSize + uint32(len(stsd)), stblNum},
+		AtomHeader{0, stblNum}, // atomHeaderSize + uint32(len(stsd) + ...)
 		stsd,
 		stts,
 		stsc,
@@ -996,6 +1042,9 @@ func writeDemo(file *os.File) error {
 		stco,
 	})
 	if err != nil { return err }
+	stblSize, err := GetBytesOf(uint32(len(stbl)))
+	if err != nil { return err }
+	stbl = slices.Replace(stbl, 0, 4, stblSize...)
 
 	vmhdNum := getUintOfFourCCStr("vmhd")
 	vmhd, err := GetBytesOf(Vmhd{
@@ -1077,11 +1126,12 @@ func writeDemo(file *os.File) error {
 		0, // PreviewDuration
 		0, // PosterTime
 		0, // SelectionTime
-		2, // SelectionDuration
+		0, // SelectionDuration
 		0, // CurrentTime
-		1, // NextTrackID  - следующий доступный ID трека
+		0, // NextTrackID  - следующий доступный ID трека
 	})
 	if err != nil { return err }
+	mvhd = slices.Concat(mvhd, make([]byte, 10))
 	mvhdSize, err := GetBytesOf(uint32(len(mvhd)))
 	if err != nil { return err }
 	mvhd = slices.Replace(mvhd, 0, 4, mvhdSize...)
