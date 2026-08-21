@@ -22,10 +22,39 @@ import (
 )
 
 var parentsAtoms []uint32 = []uint32{moovNum, udtaNum, trakNum, mdiaNum, minfNum, stblNum}
+var videoComprNums []uint32 = []uint32{
+	getUintOfFourCCStr("cvid"), //Cinepak
+	getUintOfFourCCStr("jpeg"), //JPEG
+	getUintOfFourCCStr("smc "), //Graphics
+	getUintOfFourCCStr("rle "), //Animation
+	getUintOfFourCCStr("rpza"), //Apple video
+	getUintOfFourCCStr("kpcd"), //Kodak Photo CD
+	getUintOfFourCCStr("png "), //Portable Network Graphics
+	getUintOfFourCCStr("mjpa"), //Motion-JPEG (format A)
+	getUintOfFourCCStr("mjpb"), //Motion-JPEG (format B)
+	getUintOfFourCCStr("SVQ1"), //Sorenson video, version 1
+	getUintOfFourCCStr("SVQ3"), //Sorenson video 3
+	getUintOfFourCCStr("mp4v"), //MPEG-4 video
+	getUintOfFourCCStr("avc1"), //H.264 video
+	getUintOfFourCCStr("dvc "), //NTSC DV-25 video
+	getUintOfFourCCStr("dvcp"), //PAL DV-25 video
+	getUintOfFourCCStr("gif "), //CompuServe Graphics Interchange Format
+	getUintOfFourCCStr("h263"), //H.263 video
+	getUintOfFourCCStr("tiff"), //Tagged Image File Format
+	getUintOfFourCCStr("raw "), //Uncompressed RGB
+	getUintOfFourCCStr("2vuY"), //Uncompressed Y´CbCr, 8-bit-per-component 4:2:2
+	getUintOfFourCCStr("yuv2"), //Uncompressed Y´CbCr, 8-bit-per-component 4:2:2
+	getUintOfFourCCStr("v308"), //Uncompressed Y´CbCr, 8-bit-per-component 4:4:4
+	getUintOfFourCCStr("v408"), //Uncompressed Y´CbCr, 8-bit-per-component 4:4:4:4
+	getUintOfFourCCStr("v216"), //Uncompressed Y´CbCr, 10, 12, 14, or 16-bit-per-component 4:2:2
+	getUintOfFourCCStr("v410"), //Uncompressed Y´CbCr, 10-bit-per-component 4:4:4
+	getUintOfFourCCStr("v210"), //Uncompressed Y´CbCr, 10-bit-per-component 4:2:2
+}
 
-var atomHeaderSize uint32 = 8
-var fullBoxSize uint32 = 4
-var ftypSize uint32 = 20
+const atomHeaderSize uint32 = 8
+const fullBoxSize uint32 = 4
+const ftypSize uint32 = 20
+const videoSampleDescSize int32 = 98 - 2 // idk why yet..., actual size should be 98
 
 const russLangCode int16 = 32
 const fccSize uint = 4
@@ -53,6 +82,9 @@ const dinfNum uint32 = 0x64696e66
 const hdlrNum uint32 = 0x68646c72
 const stszNum uint32 = 0x7374737a
 const sttsNum uint32 = 0x73747473
+const vmhdNum uint32 = 0x766d6864
+const colrNum uint32 = 0x636f6c72
+const paspNum uint32 = 0x70617370
 
 const maxListPrint = 5
 
@@ -351,12 +383,15 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					fmt.Sprintf("compType: %s, compSubType: %s, compName: %s",
 						compType, compSubType, underscoreSpecials(string(compName))),
 					dopInfoIndent)
+			case vmhdNum:
+				var vmhd Vmhd
+				binary.Read(bytes.NewReader(atomData), binary.BigEndian, &vmhd)
+				printWithIndent(
+					fmt.Sprintf("graphics mode: %v, opcolor: %v", vmhd.GraphicsMode, vmhd.Opcolor),
+					dopInfoIndent)
 			case mvhdNum:
 				var mvhd Mvhd
-				err := getStruct(atomData, &mvhd)
-				if err != nil {
-					panic(err)
-				}
+				binary.Read(bytes.NewReader(atomData), binary.BigEndian, &mvhd)
 				ts := mvhd.TimeScale
 				if ts == 0 {
 					ts = 1
@@ -383,26 +418,43 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				var noe int32
 				binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
 				printWithIndent(fmt.Sprintf("noe: %v", noe), dopInfoIndent)
-				sdt := content[16:atomHeader.Size]
-				rowSize := 16
-				for i := 0; i < len(sdt); {
-					start := i * rowSize
-					row := sdt[start:start+rowSize]
+				table := atomData[16:atomHeader.Size]
+				for len(table) > 0 {
+					head, err := readAtomHeader(table)
+					if err != nil { panic(err) }
+					if slices.Contains(videoComprNums, head.Type) {
+						var desc VideoSampleDescription
+						err := binary.Read(bytes.NewReader(table[:head.Size]), binary.BigEndian, &desc)
+						if err != nil { panic(err) }
 
-					var sampleSize, dfmt int32
-					var dri int16
-					binary.Read(bytes.NewReader(row[:4]), binary.BigEndian, &sampleSize)
-					binary.Read(bytes.NewReader(row[4:8]), binary.BigEndian, &dfmt)
-					binary.Read(bytes.NewReader(row[14:]), binary.BigEndian, &dri)
-					printWithIndent(
-						fmt.Sprintf("s: %v, dfmt: %#x, dfmt(str): %v, dri: %v",
-							sampleSize, dfmt, uint32ToString(uint32(dfmt)), dri),
-						dopInfoIndent)
-					tail := underscoreSpecials(string(row[16:sampleSize]))
-					printWithIndent(fmt.Sprintf("tail txt: %s", tail), dopInfoIndent)
+						comprnameb, err := GetBytesOf(desc.CompressorName)
+						if err != nil { panic(err) }
+						printWithIndent(
+							fmt.Sprintf("s: %v, dfmt: %v, w: %v, h: %v, vendor: %v, comp-r name: %v, colorId: %v",
+								desc.SampleDescriptionSize, uint32ToString(uint32(desc.DataFormat)),
+								desc.Width, desc.Height, uint32ToString(uint32(desc.Vendor)), string(comprnameb), desc.ColorTableID),
+							dopInfoIndent)
+						if int32(head.Size) > videoSampleDescSize {
+							printAtoms(table[videoSampleDescSize:], indent+4, ainfo)
+						}
+					}
 
-					i += int(sampleSize)
+					table = table[head.Size:]
 				}
+			case colrNum:
+				var colr Colr
+				binary.Read(bytes.NewReader(atomData), binary.BigEndian, &colr)
+				printWithIndent(
+					fmt.Sprintf(
+						"param type: %v, pind: %v, tind: %v, mind: %v",
+						uint32ToString(colr.ColorParamType), colr.PrimariesIndex, colr.TransferFunctionIndex, colr.MatrixIndex),
+					dopInfoIndent)
+			case paspNum:
+				var pasp Pasp
+				binary.Read(bytes.NewReader(atomData), binary.BigEndian, &pasp)
+				printWithIndent(
+					fmt.Sprintf("hspacing: %v, vspacing: %v", pasp.HSpacing, pasp.VSpacing),
+					dopInfoIndent)
 			case sttsNum:
 				var noe uint32
 				binary.Read(bytes.NewReader(atomData[12:16]), binary.BigEndian, &noe)
@@ -535,10 +587,8 @@ func findAtomsData(data []byte, t uint32, atom *[][]byte) {
 	}
 }
 
-func getUintOfFourCCStr(s string) (uint32, error) {
-	if len(s) != 4 {
-		return 0, fmt.Errorf("fourcc string must be contains 4 sybmols")
-	}
+func getUintOfFourCCStr(s string) uint32 {
+	if len(s) != 4 { panic("fourcc string must be contains 4 sybmols") }
 	b := make([]byte, 0)
 	for _, ch := range s {
 		b = append(b, byte(ch))
@@ -546,9 +596,9 @@ func getUintOfFourCCStr(s string) (uint32, error) {
 	var res uint32
 	err := binary.Read(bytes.NewReader(b), binary.BigEndian, &res)
 	if err != nil {
-		return 0, err
+		panic(err)
 	}
-	return res, nil
+	return res
 }
 
 func uint32ToString(src uint32) string {
@@ -776,8 +826,7 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 }
 
 func writeDemo(file *os.File) error {
-	brand, err := getUintOfFourCCStr("qt  ")
-	if err != nil { return err }
+	brand := getUintOfFourCCStr("qt  ")
 	ftyp, err := GetBytesOf(Ftyp{AtomHeader{ftypSize, ftypNum}, brand, 512, brand})
 	if err != nil { return err }
 	file.Write(ftyp)
@@ -823,11 +872,9 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	tkhd = slices.Replace(tkhd, 0, 4, tkhdSize...)
 
-	hdlrNum, err := getUintOfFourCCStr("hdlr")
-	compTypeNum, err := getUintOfFourCCStr("mhlr")
-	if err != nil { return err }
-	compSybtypeNum, err := getUintOfFourCCStr("vide") // or 'soun', 'subt'
-	if err != nil { return err }
+	hdlrNum := getUintOfFourCCStr("hdlr")
+	compTypeNum := getUintOfFourCCStr("mhlr")
+	compSybtypeNum := getUintOfFourCCStr("vide") // or 'soun', 'subt'
 	compName, err := GetBytesOf("\011VideoHandler")
 	hdlr, err := GetBytesOf(Hdlr{
 		AtomHeader{0, hdlrNum},
@@ -843,8 +890,7 @@ func writeDemo(file *os.File) error {
 	hdlr = slices.Replace(hdlr, 0, 4, hdlrSize...)
 
 	editListTable := []int32{totalFrames * timeScale, 0, 1 * int32(math.Pow(2, 16))}
-	elstNum, err := getUintOfFourCCStr("elst")
-	if err != nil { return err }
+	elstNum := getUintOfFourCCStr("elst")
 	elst := Elst{
 		AtomHeader{atomHeaderSize + fullBoxSize + 4 + uint32(len(editListTable))*4, elstNum},
 		FullBox{},
@@ -873,16 +919,13 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	mdhd = slices.Replace(mdhd, 0, 4, mdhdSize...)
 
-	dataFmt := 0x72617720
-	videNum, err := getUintOfFourCCStr("vide")
-	if err != nil { return err }
-	txt, err := GetBytesOf(videNum) // TODO: normal meta info
+	txt := []byte { } // TODO: normal meta info
 	if err != nil { return err }
 	stsd, err := GetBytesOf(Stsd{
 		AtomHeader{0, stsdNum},
 		FullBox{0, [3]byte{0,0,0}},
 		1,
-		[]SampleDescRow { {int32(16 + len(txt)), int32(dataFmt), [6]byte{}, 1, txt} },
+		txt,
 	})
 	if err != nil { return err }
 	stsdSize, err := GetBytesOf(uint32(len(stsd)))
@@ -901,8 +944,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	stco = slices.Replace(stco, 0, 4, stcoSize...)
 
-	sttsNum, err := getUintOfFourCCStr("stts")
-	if err != nil { return err }
+	sttsNum := getUintOfFourCCStr("stts")
 	stts, err := GetBytesOf(Stts{
 		AtomHeader{0, sttsNum},
 		FullBox{0, [3]byte{0,0,0}},
@@ -914,8 +956,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	stts = slices.Replace(stts, 0, 4, sttsSize...)
 
-	stscNum, err := getUintOfFourCCStr("stsc")
-	if err != nil { return err }
+	stscNum := getUintOfFourCCStr("stsc")
 	stsc, err := GetBytesOf(Stsc{
 		AtomHeader{0, stscNum},
 		FullBox{0, [3]byte{0,0,0}},
@@ -956,8 +997,7 @@ func writeDemo(file *os.File) error {
 	})
 	if err != nil { return err }
 
-	vmhdNum, err := getUintOfFourCCStr("vmhd")
-	if err != nil { return err }
+	vmhdNum := getUintOfFourCCStr("vmhd")
 	vmhd, err := GetBytesOf(Vmhd{
 		AtomHeader{0, vmhdNum},
 		FullBox{0, [3]byte{0,0,0}},
@@ -968,10 +1008,8 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	vmhd = slices.Replace(vmhd, 0, 4, vmhdSize...)
 
-	compTypeNum, err = getUintOfFourCCStr("dhlr")
-	if err != nil { return err }
-	compSybtypeNum, err = getUintOfFourCCStr("url ")
-	if err != nil { return err }
+	compTypeNum = getUintOfFourCCStr("dhlr")
+	compSybtypeNum = getUintOfFourCCStr("url ")
 	compName, err = GetBytesOf("\011DataHandler")
 	minfHdlr, err := GetBytesOf(Hdlr{
 		AtomHeader{0, hdlrNum},

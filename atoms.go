@@ -130,15 +130,42 @@ type Stsd struct {
 	AtomHeader
 	FullBox // specification of the version of this sample description atom, A 3-byte space for sample description flags.
 	NOE         int32   // containing the number of sample descriptions that follow.
-	SampleTable []SampleDescRow // An array of sample descriptions
+	SampleTable []byte // An array of sample descriptions
 }
 
-type SampleDescRow struct {
-	Size         int32
-	DataFmt      int32
-	_            [6]byte
-	DataRefIndex int16
-	Description  []byte
+type VideoSampleDescription struct {
+	SampleDescriptionSize int32 // indicating the number of bytes in the sample description.
+	DataFormat            int32 //  indicating the format of the stored data.
+	_                     [6]byte // ReservedSix bytes.
+	DataReferenceIndex    int16 // that contains the index of the data reference to use to retrieve data associated with samples that use this sample description.
+	Version               int16 // indicating the version number of the compressed data.
+	RevisionLevel         int16
+	Vendor                int32 // that specifies the developer of the compressor that generated the compressed data.
+	TemporalQuality       int32 // that indicates the degree of temporal compression.
+	SpatialQuality        int32 // that indicates the degree of spatial compression.
+	Width                 int16 // that specifies the width of the source image in pixels.
+	Height                int16 // that specifies the height of the source image in pixels.
+	HorizontalResolution  int32 // 32-bit fixed-point, horizontal resolution of the image in pixels per inch.
+	VerticalResolution    int32 // 32-bit fixed-point, vertical resolution of the image in pixels per inch.
+	DataSize              int32
+	FrameCount            int16 // that indicates how many frames of compressed data are stored in each sample.
+	CompressorName        [32]byte // 32-byte Pascal string containing the name of the compressor that created the image, such as “jpeg”.
+	Depth                 int16 // that indicates the pixel depth of the compressed image.
+	ColorTableID          int16 // that identifies which color table to use
+}
+
+type Colr struct {
+	AtomHeader
+	ColorParamType        uint32 // = 'nclc'
+	PrimariesIndex        uint16 // = 1
+	TransferFunctionIndex uint16 // = 1
+	MatrixIndex           uint16 // = 1
+}
+
+type Pasp struct {
+	AtomHeader
+	HSpacing uint32 // horizontal spacing of pixels, such as luma sampling instants for Y´CbCr or YUV video
+	VSpacing uint32 // vertical spacing of pixels, such as video picture lines
 }
 
 type Hdlr struct {
