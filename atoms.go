@@ -154,6 +154,12 @@ type VideoSampleDescription struct {
 	ColorTableID          int16 // that identifies which color table to use
 }
 
+type Fiel struct {
+	AtomHeader
+	Count byte
+	Order byte
+}
+
 type Colr struct {
 	AtomHeader
 	ColorParamType        uint32 // = 'nclc'

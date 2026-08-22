@@ -53,7 +53,7 @@ var videoComprNums []uint32 = []uint32{
 const atomHeaderSize uint32 = 8
 const fullBoxSize uint32 = 4
 const ftypSize uint32 = 20
-const videoSampleDescSize int32 = 98 - 2 // idk why yet..., actual size should be 98
+const videoSampleDescSize int32 = 86
 
 const russLangCode int16 = 32
 const fccSize uint = 4
@@ -84,6 +84,7 @@ const sttsNum uint32 = 0x73747473
 const vmhdNum uint32 = 0x766d6864
 const colrNum uint32 = 0x636f6c72
 const paspNum uint32 = 0x70617370
+const fielNum uint32 = 0x6669656c
 
 const maxListPrint = 5
 
@@ -341,6 +342,24 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 
 		if ainfo {
 			atomData := content[:skipSize]
+			if slices.Contains(videoComprNums, atomHeader.Type) {
+				var desc VideoSampleDescription
+				err := binary.Read(bytes.NewReader(atomData[:videoSampleDescSize]), binary.BigEndian, &desc)
+				if err != nil { panic(err) }
+
+				comprnameb, err := GetBytesOf(desc.CompressorName)
+				if err != nil { panic(err) }
+				printWithIndent(fmt.Sprintf(
+					"s: %v, dfmt: %v, w: %v, h: %v, vendor: %v, comp-r name: %v, colorId: %v, dsize: %v",
+					desc.SampleDescriptionSize, uint32ToString(uint32(desc.DataFormat)),
+					desc.Width, desc.Height, uint32ToString(uint32(desc.Vendor)),
+					string(comprnameb), desc.ColorTableID, desc.DataSize),
+					dopInfoIndent)
+				if int32(atomHeader.Size) > videoSampleDescSize {
+					printAtoms(atomData[videoSampleDescSize:], indent+4, ainfo)
+				}
+			}
+
 			switch atomHeader.Type {
 			case ftypNum:
 				ftyp, err := getFtyp(atomData)
@@ -414,32 +433,16 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				sgiTxt := underscoreSpecials(string(sgi))
 				printWithIndent(fmt.Sprintf("software generated info: %s", sgiTxt), dopInfoIndent)
 			case stsdNum:
-				var noe int32
-				binary.Read(bytes.NewReader(content[12:16]), binary.BigEndian, &noe)
-				printWithIndent(fmt.Sprintf("noe: %v", noe), dopInfoIndent)
 				table := atomData[16:atomHeader.Size]
-				for len(table) > 0 {
-					head, err := readAtomHeader(table)
-					if err != nil { panic(err) }
-					if slices.Contains(videoComprNums, head.Type) {
-						var desc VideoSampleDescription
-						err := binary.Read(bytes.NewReader(table[:head.Size]), binary.BigEndian, &desc)
-						if err != nil { panic(err) }
-
-						comprnameb, err := GetBytesOf(desc.CompressorName)
-						if err != nil { panic(err) }
-						printWithIndent(
-							fmt.Sprintf("s: %v, dfmt: %v, w: %v, h: %v, vendor: %v, comp-r name: %v, colorId: %v, dsize: %v",
-								desc.SampleDescriptionSize, uint32ToString(uint32(desc.DataFormat)),
-								desc.Width, desc.Height, uint32ToString(uint32(desc.Vendor)), string(comprnameb), desc.ColorTableID, desc.DataSize),
-							dopInfoIndent)
-						if int32(head.Size) > videoSampleDescSize {
-							printAtoms(table[videoSampleDescSize:], indent+4, ainfo)
-						}
-					}
-
-					table = table[head.Size:]
+				if len(table) > 0 {
+					printAtoms(table, nextLevelIndent, ainfo)
 				}
+			case fielNum:
+				var fiel Fiel
+				binary.Read(bytes.NewReader(atomData), binary.BigEndian, &fiel)
+				printWithIndent(
+					fmt.Sprintf("count: %v, ordering: %v", fiel.Count, fiel.Order),
+					dopInfoIndent)
 			case colrNum:
 				var colr Colr
 				binary.Read(bytes.NewReader(atomData), binary.BigEndian, &colr)
@@ -941,6 +944,10 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	videoSampleDesc = slices.Replace(videoSampleDesc, 0, 4, videoSampleDescSize...)
 	meta = slices.Concat(meta, videoSampleDesc)
+
+	fiel, err := GetBytesOf(Fiel{AtomHeader{10, fielNum}, 1, 0})
+	if err != nil { return err }
+	meta = slices.Concat(meta, fiel)
 
 	colr, err := GetBytesOf(Colr{
 		AtomHeader{0, colrNum},
