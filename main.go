@@ -88,6 +88,10 @@ const fielNum uint32 = 0x6669656c
 
 const maxListPrint = 5
 
+type UintX interface {
+	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
+}
+
 type ImgDims struct {
 	Width  int32
 	Height int32
@@ -119,6 +123,62 @@ func getStruct[T any](atomData []byte, res *T) (error) {
 		return err
 	}
 	return nil
+}
+
+func readTransformMatrix(data []byte) ([9]float32, error) {
+	const elemSize int = 4
+
+	res := [9]float32{}
+	if len(data) != 9 * elemSize {
+		return res, fmt.Errorf("invalid data length to read transform matrix")
+	}
+	for i := range len(res) {
+		var val uint32
+		pos := i * elemSize
+		binary.Read(bytes.NewReader(data[pos:pos+elemSize]), binary.BigEndian, &val)
+		if (i+1) % 3 == 0 {
+			res[i] = float32(fromFixedPoint(val, 2, 30))
+		} else {
+			res[i] = float32(fromFixedPoint(val, 16, 16))
+		}
+	}
+	return res, nil
+}
+
+// converts fixed point 'src' represented with 'ic'.'fc' bits ratio to float
+// 'ic' - integer bits count
+// 'fc' - fractional bits count
+func fromFixedPoint[T UintX](src T, ic, fc int) float64 {
+	intact := float64(src >> ic)
+	mask := T(1)
+	for range fc-1 {
+		mask <<= 1
+		mask++
+	}
+	fract := float64(src & mask) / math.Pow(2, float64(fc))
+	return intact + fract
+}
+
+// converts 'num' to uint representing fixed point 'ic'.'fc'
+// 'ic' - integer bits count
+// 'fc' - fractional bits count
+func toFixedPoint[T UintX](num float64, ic, fc int) (T, error) {
+	bitsCount := ic+fc
+	if !slices.Contains([]int {8, 16, 32, 64}, bitsCount) {
+		return 0, fmt.Errorf(
+			"provided fixed formula is not correct! sum of 'i' and 'fl' " +
+			"should be equal to N of uint'N', but got: %d", bitsCount)
+	}
+	fractPart := num - float64(int64(num))
+	minFract  := 1 / math.Pow(2, float64(fc))
+	maxVal := int64(1) << bitsCount
+	if num >= float64(maxVal) {
+		return 0, fmt.Errorf("overflow: %f cannot convert to number with %d bits", num, ic)
+	}
+	res := T(0)
+	res |= T(num) << fc
+	res |= T(fractPart / minFract)
+	return res, nil
 }
 
 func getMdat(data []byte) (Mdat, error) {
@@ -385,9 +445,9 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				binary.Read(bytes.NewReader(atomData[84:88]), binary.BigEndian, &w)
 				binary.Read(bytes.NewReader(atomData[88:92]), binary.BigEndian, &h)
 				binary.Read(bytes.NewReader(atomData[44:46]), binary.BigEndian, &vol)
-				w /= int32(math.Pow(2, 16))
-				h /= int32(math.Pow(2, 16))
-				vol /= int16(math.Pow(2, 8))
+				w >>= 16
+				h >>= 16
+				vol >>= 8
 				printWithIndent(fmt.Sprintf("w: %v, h: %v, volume: %v", w, h, vol), dopInfoIndent)
 			case hdlrNum:
 				compType, err := GetBytesOf(content[12:16])
@@ -415,9 +475,10 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					ts = 1
 				}
 				durationSec := float32(mvhd.Duration) / float32(ts)
-				// TODO: get the matrix
+				matr, err := readTransformMatrix(atomData[34:70])
+				if err != nil { fmt.Printf("warning: could not read transform matrix due to err: %v", err) }
 				printWithIndent(
-					fmt.Sprintf("duration: %fs, timeScale: %d, matrix: %v", durationSec, mvhd.TimeScale, mvhd.Matrix),
+					fmt.Sprintf("duration: %fs, timeScale: %d, matrix: %v", durationSec, mvhd.TimeScale, matr),
 					dopInfoIndent)
 			case mdhdNum:
 				var mdhd Mdhd
@@ -539,7 +600,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					for i := range min(maxListPrint, count) {
 						tdur  := table[i*3]
 						mtime := table[i*3 + 1]
-						mrate := table[i*3 + 2] / int32(math.Pow(2, 16))
+						mrate := table[i*3 + 2] >> 16
 						printWithIndent(
 							fmt.Sprintf("trak dur: %v media time: %v, media rate: %v", tdur, mtime, mrate),
 							dopInfoIndent)
@@ -866,8 +927,8 @@ func writeDemo(file *os.File) error {
 		0,
 		0,
 		[36]byte{},
-		int32(int32(w) * int32(math.Pow(2, 16))),
-		int32(int32(h) * int32(math.Pow(2, 16))),
+		int32(int32(w) << 16),
+		int32(int32(h) << 16),
 	})
 	if err != nil { return err }
 	tkhdSize, err := GetBytesOf(uint32(len(tkhd)))
@@ -891,7 +952,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	hdlr = slices.Replace(hdlr, 0, 4, hdlrSize...)
 
-	editListTable := []int32{totalFrames * timeScale, 0, 1 * int32(math.Pow(2, 16))}
+	editListTable := []int32{totalFrames * timeScale, 0, 1 << 16}
 	elstNum := getUintOfFourCCStr("elst")
 	elst := Elst{
 		AtomHeader{atomHeaderSize + fullBoxSize + 4 + uint32(len(editListTable))*4, elstNum},
