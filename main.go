@@ -131,13 +131,14 @@ func getStruct[T any](atomData []byte, res *T) (error) {
 	return nil
 }
 
-func readTransformMatrix(data []byte) ([9]float32, error) {
+func readQTMatrix(data []byte) ([9]float32, error) {
 	const elemSize int = 4
 
 	res := [9]float32{}
 	if len(data) != 9 * elemSize {
 		return res, fmt.Errorf("invalid data length to read transform matrix")
 	}
+
 	for i := range len(res) {
 		var val uint32
 		pos := i * elemSize
@@ -168,23 +169,23 @@ func fromFixedPoint[T UintX](src T, ic, fc int) float64 {
 // converts 'num' to uint representing fixed point 'ic'.'fc'
 // 'ic' - integer bits count
 // 'fc' - fractional bits count
-func toFixedPoint[T UintX](num float64, ic, fc int) (T, error) {
+func toFixedPoint[T UintX](num float64, ic, fc int) T {
 	bitsCount := ic+fc
 	if !slices.Contains([]int {8, 16, 32, 64}, bitsCount) {
-		return 0, fmt.Errorf(
+		panic(fmt.Errorf(
 			"provided fixed formula is not correct! sum of 'i' and 'fl' " +
-			"should be equal to N of uint'N', but got: %d", bitsCount)
+			"should be equal to N of uint'N', but got: %d", bitsCount))
 	}
 	fractPart := num - float64(int64(num))
 	minFract  := 1 / math.Pow(2, float64(fc))
 	maxVal := int64(1) << bitsCount
 	if num >= float64(maxVal) {
-		return 0, fmt.Errorf("overflow: %f cannot convert to number with %d bits", num, ic)
+		panic(fmt.Errorf("overflow: %f cannot convert to number with %d bits", num, ic))
 	}
 	res := T(0)
 	res |= T(num) << fc
 	res |= T(fractPart / minFract)
-	return res, nil
+	return res
 }
 
 func getMdat(data []byte) (Mdat, error) {
@@ -456,10 +457,14 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				binary.Read(bytes.NewReader(atomData[84:88]), binary.BigEndian, &w)
 				binary.Read(bytes.NewReader(atomData[88:92]), binary.BigEndian, &h)
 				binary.Read(bytes.NewReader(atomData[44:46]), binary.BigEndian, &vol)
-				w >>= 16
-				h >>= 16
-				vol >>= 8
-				printWithIndent(fmt.Sprintf("w: %v, h: %v, volume: %v", w, h, vol), dopInfoIndent)
+				printWithIndent(fmt.Sprintf(
+					"w: %v, h: %v, volume: %v",
+					fromFixedPoint(uint32(w), 16, 16),
+					fromFixedPoint(uint32(h), 16, 16),
+					fromFixedPoint(uint16(vol), 8, 8)), dopInfoIndent)
+				matr, err := readQTMatrix(atomData[48:48+36])
+				if err != nil { fmt.Println("warning: could not read matrix dur to err", err) }
+				printWithIndent(fmt.Sprintf("%v", matr), dopInfoIndent)
 			case hdlrNum:
 				compType, err := GetBytesOf(content[12:16])
 				if err != nil { return }
@@ -486,7 +491,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					ts = 1
 				}
 				durationSec := float32(mvhd.Duration) / float32(ts)
-				matr, err := readTransformMatrix(atomData[34:70])
+				matr, err := readQTMatrix(atomData[34:70])
 				if err != nil { fmt.Printf("warning: could not read transform matrix due to err: %v", err) }
 				printWithIndent(
 					fmt.Sprintf("duration: %fs, timeScale: %d, matrix: %v", durationSec, mvhd.TimeScale, matr),
@@ -611,7 +616,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					for i := range min(maxListPrint, count) {
 						tdur  := table[i*3]
 						mtime := table[i*3 + 1]
-						mrate := table[i*3 + 2] >> 16
+						mrate := fromFixedPoint(uint32(table[i*3 + 2]), 16, 16)
 						printWithIndent(
 							fmt.Sprintf("trak dur: %v media time: %v, media rate: %v", tdur, mtime, mrate),
 							dopInfoIndent)
@@ -629,7 +634,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 		}
 
 		if slices.Contains(parentsAtoms, atomHeader.Type) {
-			printAtoms(content[8:skipSize], nextLevelIndent, ainfo)
+			printAtoms(content[atomHeaderSize:skipSize], nextLevelIndent, ainfo)
 		}
 
 		printAtoms(content[skipSize:], indent, ainfo)
@@ -945,13 +950,13 @@ func writeDemo(file *os.File) error {
 
 	hdlrNum := getUintOfFourCCStr("hdlr")
 	compTypeNum := getUintOfFourCCStr("mhlr")
-	compSybtypeNum := getUintOfFourCCStr("vide") // or 'soun', 'subt'
-	compName, err := GetBytesOf("\011VideoHandler")
+	url_Num := getUintOfFourCCStr("vide") // or 'soun', 'subt'
+	compName, err := GetBytesOf("VideoHandler") // \012
 	hdlr, err := GetBytesOf(Hdlr{
 		AtomHeader{0, hdlrNum},
 		FullBox{0, [3]byte{0,0,0}},
 		compTypeNum,
-		compSybtypeNum,
+		url_Num,
 		[4]byte{}, [4]byte{}, [4]byte{},
 		compName,
 	})
@@ -1134,13 +1139,13 @@ func writeDemo(file *os.File) error {
 	vmhd = slices.Replace(vmhd, 0, 4, vmhdSize...)
 
 	compTypeNum = getUintOfFourCCStr("dhlr")
-	compSybtypeNum = getUintOfFourCCStr("url ")
-	compName, err = GetBytesOf("\011DataHandler")
+	url_Num = getUintOfFourCCStr("url ")
+	compName, err = GetBytesOf("DataHandler") // \011
 	minfHdlr, err := GetBytesOf(Hdlr{
 		AtomHeader{0, hdlrNum},
 		FullBox{0, [3]byte{0,0,0}},
 		compTypeNum,
-		compSybtypeNum,
+		url_Num,
 		[4]byte{}, [4]byte{}, [4]byte{},
 		compName,
 	})
