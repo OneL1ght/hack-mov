@@ -20,7 +20,7 @@ import (
 	"os"
 )
 
-var parentsAtoms []uint32 = []uint32{moovNum, udtaNum, trakNum, mdiaNum, minfNum, stblNum}
+var parentsAtoms []uint32 = []uint32{moovNum, udtaNum, trakNum, mdiaNum, minfNum, stblNum, dinfNum}
 var videoComprNums []uint32 = []uint32{
 	getUintOfFourCCStr("cvid"), //Cinepak
 	getUintOfFourCCStr("jpeg"), //JPEG
@@ -48,6 +48,11 @@ var videoComprNums []uint32 = []uint32{
 	getUintOfFourCCStr("v216"), //Uncompressed Y´CbCr, 10, 12, 14, or 16-bit-per-component 4:2:2
 	getUintOfFourCCStr("v410"), //Uncompressed Y´CbCr, 10-bit-per-component 4:4:4
 	getUintOfFourCCStr("v210"), //Uncompressed Y´CbCr, 10-bit-per-component 4:2:2
+}
+var drefInfoNums []uint32 = []uint32{
+	getUintOfFourCCStr("alis"), //information about the file it refers to, including its full path name.
+	getUintOfFourCCStr("rsrc"), //information documents existing content containing 'rsrc' data references; don’t use it for new development
+	getUintOfFourCCStr("url "), //C string that specifies a URL. There may be additional data after the C string.
 }
 
 const atomHeaderSize uint32 = 8
@@ -85,6 +90,7 @@ const vmhdNum uint32 = 0x766d6864
 const colrNum uint32 = 0x636f6c72
 const paspNum uint32 = 0x70617370
 const fielNum uint32 = 0x6669656c
+const drefNum uint32 = 0x64726566
 
 const maxListPrint = 5
 
@@ -418,6 +424,11 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				if int32(atomHeader.Size) > videoSampleDescSize {
 					printAtoms(atomData[videoSampleDescSize:], indent+4, ainfo)
 				}
+			} else if slices.Contains(drefInfoNums, atomHeader.Type) {
+				printWithIndent(fmt.Sprintf(
+					"s: %v, version: %v, flags: %v, data: %v",
+					atomHeader.Size, atomData[8], atomData[9:12], underscoreSpecials(string(atomData[12:]))),
+					dopInfoIndent)
 			}
 
 			switch atomHeader.Type {
@@ -609,14 +620,11 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
 					}
 				} else { printWithIndent("Warning: there was no values!", dopInfoIndent)}
-			case dinfNum:
-				dref := content[(atomHeaderSize + 16):skipSize]
-				for i := 0; i < len(dref); {
-					var sz int32
-					binary.Read(bytes.NewReader(dref[i:i+4]), binary.BigEndian, &sz)
-					printWithIndent(fmt.Sprintf("t: %s, s: %v, data: %v", dref[i+4:i+8], sz, dref[i+12:sz]), dopInfoIndent)
-					i += int(sz)
-				}
+			case drefNum:
+				printWithIndent(
+					fmt.Sprintf("ver: %v, flags: %v, noe: %d",
+						atomData[8], atomData[9:12], atomData[12:16]), dopInfoIndent)
+				printAtoms(atomData[16:], nextLevelIndent, ainfo)
 			}
 		}
 
@@ -1141,18 +1149,42 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	minfHdlr = slices.Replace(minfHdlr, 0, 4, minfHdlrSize...)
 
+	dref, err := GetBytesOf(Dref{
+		AtomHeader{8 + 4 + 4 + 12, drefNum},
+		FullBox{},
+		1,
+		[]DatRef{{
+			AtomHeader{12, url_Num},
+			FullBox{0, [3]byte{0,0,1}},
+			[]byte{},
+		}},
+	})
+
+	dinf, err := GetBytesOf(struct {
+		Head AtomHeader
+		Dref []byte
+	} {
+		AtomHeader{uint32(8 + len(dref)), dinfNum},
+		dref,
+	})
+
 	minf, err := GetBytesOf(struct {
 		Head AtomHeader
 		Vmhd []byte
 		Hdlr []byte
+		Dinf []byte
 		Stbl []byte
 	}{
-		AtomHeader{atomHeaderSize + uint32(len(stbl) + len(vmhd) + len(minfHdlr)), minfNum},
+		AtomHeader{0, minfNum},
 		vmhd,
 		minfHdlr,
+		dinf,
 		stbl,
 	})
 	if err != nil { return err }
+	minfSize, err := GetBytesOf(uint32(len(minf)))
+	if err != nil { return err }
+	minf = slices.Replace(minf, 0, 4, minfSize...)
 
 	mdia, err := GetBytesOf(struct {
 		Head AtomHeader

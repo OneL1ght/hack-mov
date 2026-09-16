@@ -191,3 +191,16 @@ type Vmhd struct {
 	GraphicsMode int16
 	Opcolor      [3]int16 // rgb for transfer mode orientation
 }
+
+type DatRef struct {
+	AtomHeader
+	FullBox
+	Info []byte
+}
+
+type Dref struct {
+	AtomHeader
+	FullBox
+	Noe int32
+	Referensec []DatRef
+}
