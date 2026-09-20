@@ -417,10 +417,12 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				comprnameb, err := GetBytesOf(desc.CompressorName)
 				if err != nil { panic(err) }
 				printWithIndent(fmt.Sprintf(
-					"s: %v, dfmt: %v, w: %v, h: %v, vendor: %v, comp-r name: %v, colorId: %v, dsize: %v",
-					desc.SampleDescriptionSize, uint32ToString(uint32(desc.DataFormat)),
+					"s: %v, dfmt: %v, dri: %v, w: %v, h: %v, vendor: %v, comp-r name: %v, colorId: %v, dsize: %v, ppi: %v %v, frameC: %v",
+					desc.SampleDescriptionSize, uint32ToString(uint32(desc.DataFormat)), desc.DataReferenceIndex,
 					desc.Width, desc.Height, uint32ToString(uint32(desc.Vendor)),
-					string(comprnameb), desc.ColorTableID, desc.DataSize),
+					string(comprnameb), desc.ColorTableID, desc.DataSize,
+					fromFixedPoint(uint32(desc.HorizontalResolution), 16, 16), fromFixedPoint(uint32(desc.VerticalResolution), 16, 16),
+					desc.FrameCount),
 					dopInfoIndent)
 				if int32(atomHeader.Size) > videoSampleDescSize {
 					printAtoms(atomData[videoSampleDescSize:], indent+4, ainfo)
