@@ -915,12 +915,23 @@ func writeDemo(file *os.File) error {
 
 	h := 720
 	w := 1280
+	fps := int32(1)
 	totalFrames := int32(2)
 	oneFrameSize := int32(w*h*3)
 	timeScale := int32(1000)
 	durationSec := int32(2)
 	contentSize := oneFrameSize * totalFrames
 	content := make([]byte, contentSize)
+	for i := range len(content) {
+		var v byte
+		if i > len(content) / 2 {
+			v = 100
+		} else {
+			v = 200
+		}
+		content[i] = v
+	}
+
 	mdat, err := GetBytesOf(Mdat{AtomHeader{0, mdatNum}, 0, content})
 	if err != nil { return err }
 	mdatSize, err := GetBytesOf(uint32(len(mdat)))
@@ -941,7 +952,7 @@ func writeDemo(file *os.File) error {
 		0,
 		0,
 		0,
-		[36]byte{},
+		[36]byte{0,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 64,0,0,0}, // as in example
 		int32(int32(w) << 16),
 		int32(int32(h) << 16),
 	})
@@ -967,7 +978,11 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	hdlr = slices.Replace(hdlr, 0, 4, hdlrSize...)
 
-	editListTable := []int32{totalFrames * timeScale, 0, 1 << 16}
+	editListTable := []int32{
+		totalFrames / fps * timeScale, // trak dur
+		0,       // media time
+		1 << 16, // media rate
+	}
 	elstNum := getUintOfFourCCStr("elst")
 	elst := Elst{
 		AtomHeader{atomHeaderSize + fullBoxSize + 4 + uint32(len(editListTable))*4, elstNum},
@@ -981,17 +996,19 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	edts = slices.Replace(edts, 0, 4, edtsSize...)
 
+	trakTS := int32(30000)
 	mdhd, err := GetBytesOf(Mdhd{
 		AtomHeader{0, mdhdNum},
 		FullBox{1, [3]byte{0,0,0}},
 		0,
 		0,
-		timeScale,
-		durationSec * timeScale,
+		trakTS,
+		durationSec * trakTS,
 		32767, // from example video
 		0,
 	}) 
 	if err != nil { return err }
+	mdhd = slices.Concat(mdhd, make([]byte, 12)) // ffprobe said "overread" without it
 	mdhdSize, err := GetBytesOf(uint32(len(mdhd)))
 	if err != nil { return err }
 	mdhd = slices.Replace(mdhd, 0, 4, mdhdSize...)
@@ -1002,18 +1019,19 @@ func writeDemo(file *os.File) error {
 		int32(raw_Num),
 		[6]byte{},
 		1,
-		1,
-		1,
-		int32(getUintOfFourCCStr("FFMP")),
-		1,
-		1,
-		int16(w), int16(h),
-		72, 72,
 		0,
-		1,
-		[32]byte{22,76,97,118,99,54,50,46,49,49,46,49,48,48,32,114,97,119,118,105,100,101,111,0,0,0,0,0,0,0,0,0}, // from example video
+		0,
+		int32(getUintOfFourCCStr("FFMP")),
+		0,
+		0,
+		int16(w), int16(h),
+		72 << 16, 72 << 16,
+		0,
+		int16(totalFrames), // frame count
+		// [32]byte{22,76,97,118,99,54,50,46,49,49,46,49,48,48,32,114,97,119,118,105,100,101,111,0,0,0,0,0,0,0,0,0}, // from example video 
+		[32]byte{},
 		24,
-		1,
+		-1,
 	})
 	if err != nil { return err }
 	videoSampleDescSize, err := GetBytesOf(uint32(len(videoSampleDesc)))
@@ -1243,18 +1261,35 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	mvhd = slices.Replace(mvhd, 0, 4, mvhdSize...)
 
-	moovBytes, err := GetBytesOf(struct {
+	udta, err := GetBytesOf(struct {
+		Head AtomHeader
+		List []byte
+	} {
+		AtomHeader{0, udtaNum},
+		[]byte{0,0,0,24,169,115,119,114,0,12,85,196,76,97,118,102,54,50,46,51,46,49,48,48}, // from example video
+	})
+	if err != nil { return err }
+	udtaSize, err := GetBytesOf(uint32(len(udta)))
+	if err != nil { return err }
+	udta = slices.Replace(udta, 0, 4, udtaSize...)
+
+	moov, err := GetBytesOf(struct {
 		Head AtomHeader
 		Mvhd []byte
 		Trak []byte
+		// Udta []byte
 	} {
-		AtomHeader{atomHeaderSize + uint32(len(mvhd) + len(trak)), moovNum},
+		AtomHeader{0, moovNum},
 		mvhd,
 		trak,
+		// udta,
 	})
 	if err != nil { return err }
+	moovSize, err := GetBytesOf(uint32(len(moov)))
+	if err != nil { return err }
+	moov = slices.Replace(moov, 0, 4, moovSize...)
 
-	file.Write(moovBytes)
+	file.Write(moov)
 	fmt.Println("writing end up successfully!")
 	return nil
 }
