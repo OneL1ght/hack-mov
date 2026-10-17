@@ -1014,31 +1014,6 @@ func writeDemo(file *os.File) error {
 	mdhd = slices.Replace(mdhd, 0, 4, mdhdSize...)
 
 	meta := []byte{}
-	videoSampleDesc, err := GetBytesOf(VideoSampleDescription{
-		0,
-		int32(raw_Num),
-		[6]byte{},
-		1,
-		0,
-		0,
-		int32(getUintOfFourCCStr("FFMP")),
-		0,
-		0,
-		int16(w), int16(h),
-		72 << 16, 72 << 16,
-		0,
-		int16(totalFrames), // frame count
-		// [32]byte{22,76,97,118,99,54,50,46,49,49,46,49,48,48,32,114,97,119,118,105,100,101,111,0,0,0,0,0,0,0,0,0}, // from example video 
-		[32]byte{},
-		24,
-		-1,
-	})
-	if err != nil { return err }
-	videoSampleDescSize, err := GetBytesOf(uint32(len(videoSampleDesc)))
-	if err != nil { return err }
-	videoSampleDesc = slices.Replace(videoSampleDesc, 0, 4, videoSampleDescSize...)
-	meta = slices.Concat(meta, videoSampleDesc)
-
 	fiel, err := GetBytesOf(Fiel{AtomHeader{10, fielNum}, 1, 0})
 	if err != nil { return err }
 	meta = slices.Concat(meta, fiel)
@@ -1065,13 +1040,37 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	pasp = slices.Replace(pasp, 0, 4, paspSize...)
 	meta = slices.Concat(meta, pasp)
+	videoSampleDesc, err := GetBytesOf(VideoSampleDescription{
+		0,
+		int32(raw_Num),
+		[6]byte{},
+		1,
+		0,
+		0,
+		int32(getUintOfFourCCStr("UNKN")),
+		0,
+		0,
+		int16(w), int16(h),
+		72 << 16, 72 << 16,
+		0,
+		1, // frame count
+		[32]byte{22,76,97,118,99,54,50,46,49,49,46,49,48,48,32,114,97,119,118,105,100,101,111,0,0,0,0,0,0,0,0,0}, // from example video 
+		24,
+		-1,
+	})
+	if err != nil { return err }
+
+	videoSampleDesc = slices.Concat(videoSampleDesc, meta)
+	videoSampleDescSize, err := GetBytesOf(uint32(len(videoSampleDesc)))
+	if err != nil { return err }
+	videoSampleDesc = slices.Replace(videoSampleDesc, 0, 4, videoSampleDescSize...)
 
 	if err != nil { return err }
 	stsd, err := GetBytesOf(Stsd{
 		AtomHeader{0, stsdNum},
 		FullBox{0, [3]byte{0,0,0}},
 		1,
-		meta,
+		videoSampleDesc,
 	})
 	if err != nil { return err }
 	stsdSize, err := GetBytesOf(uint32(len(stsd)))
