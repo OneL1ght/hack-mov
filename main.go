@@ -605,6 +605,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					return
 				}
 
+				printWithIndent(fmt.Sprintf("noe: %v", stco.NOE), dopInfoIndent)
 				count := len(stco.ChunkOffsets)
 				if count > 0 {
 					for i := range min(maxListPrint, count) {
@@ -1094,7 +1095,7 @@ func writeDemo(file *os.File) error {
 	stco, err := GetBytesOf(Stco{
 		AtomHeader{0, stcoNum},
 		FullBox{0, [3]byte{0,0,0}},
-		1,
+		uint32(totalFrames),
 		offsets,
 	})
 	if err != nil { return err }
