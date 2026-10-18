@@ -418,11 +418,15 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 				comprnameb, err := GetBytesOf(desc.CompressorName)
 				if err != nil { panic(err) }
 				printWithIndent(fmt.Sprintf(
-					"s: %v, dfmt: %v, dri: %v, w: %v, h: %v, vendor: %v, comp-r name: %v, colorId: %v, dsize: %v, ppi: %v %v, frameC: %v",
+					"s: %v, dfmt: %v, dri: %v, w: %v, h: %v, vendor: %v",
 					desc.SampleDescriptionSize, uint32ToString(uint32(desc.DataFormat)), desc.DataReferenceIndex,
-					desc.Width, desc.Height, uint32ToString(uint32(desc.Vendor)),
+					desc.Width, desc.Height, uint32ToString(uint32(desc.Vendor))),
+					dopInfoIndent)
+				printWithIndent(fmt.Sprintf(
+					"comp-r name: %v, colorId: %v, dsize: %v, ppi: %v %v, frameC: %v",
 					string(comprnameb), desc.ColorTableID, desc.DataSize,
-					fromFixedPoint(uint32(desc.HorizontalResolution), 16, 16), fromFixedPoint(uint32(desc.VerticalResolution), 16, 16),
+					fromFixedPoint(uint32(desc.HorizontalResolution), 16, 16),
+					fromFixedPoint(uint32(desc.VerticalResolution), 16, 16),
 					desc.FrameCount),
 					dopInfoIndent)
 				if int32(atomHeader.Size) > videoSampleDescSize {
@@ -456,18 +460,19 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					skipSize = uint64(mdat.ExtendedSize)
 				}
 			case tkhdNum:
-				var w, h, dur int32; var vol, layer, altGr int16
+				var w, h, dur, id int32; var vol, layer, altGr int16
 				binary.Read(bytes.NewReader(atomData[84:88]), binary.BigEndian, &w)
 				binary.Read(bytes.NewReader(atomData[88:92]), binary.BigEndian, &h)
 				binary.Read(bytes.NewReader(atomData[44:46]), binary.BigEndian, &vol)
 				binary.Read(bytes.NewReader(atomData[28:32]), binary.BigEndian, &dur)
 				binary.Read(bytes.NewReader(atomData[40:42]), binary.BigEndian, &layer)
 				binary.Read(bytes.NewReader(atomData[42:44]), binary.BigEndian, &altGr)
+				binary.Read(bytes.NewReader(atomData[20:24]), binary.BigEndian, &id)
 				printWithIndent(fmt.Sprintf(
-					"w: %v, h: %v, volume: %v, dur: %v, lay: %v, alt gr: %v",
+					"w: %v, h: %v, volume: %v, dur: %v, lay: %v, alt gr: %v, id: %v",
 					fromFixedPoint(uint32(w), 16, 16),
 					fromFixedPoint(uint32(h), 16, 16),
-					fromFixedPoint(uint16(vol), 8, 8), dur, layer, altGr), dopInfoIndent)
+					fromFixedPoint(uint16(vol), 8, 8), dur, layer, altGr, id), dopInfoIndent)
 				matr, err := readQTMatrix(atomData[48:48+36])
 				if err != nil { fmt.Println("warning: could not read matrix dur to err", err) }
 				printWithIndent(fmt.Sprintf("%v", matr), dopInfoIndent)
@@ -954,7 +959,7 @@ func writeDemo(file *os.File) error {
 		FullBox{0, [3]byte{0,0,0}},
 		0,
 		0,
-		0,
+		1,
 		0,
 		durationSec * timeScale,
 		[8]byte{},
