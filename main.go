@@ -456,15 +456,18 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					skipSize = uint64(mdat.ExtendedSize)
 				}
 			case tkhdNum:
-				var w, h int32; var vol int16
+				var w, h, dur int32; var vol, layer, altGr int16
 				binary.Read(bytes.NewReader(atomData[84:88]), binary.BigEndian, &w)
 				binary.Read(bytes.NewReader(atomData[88:92]), binary.BigEndian, &h)
 				binary.Read(bytes.NewReader(atomData[44:46]), binary.BigEndian, &vol)
+				binary.Read(bytes.NewReader(atomData[28:32]), binary.BigEndian, &dur)
+				binary.Read(bytes.NewReader(atomData[40:42]), binary.BigEndian, &layer)
+				binary.Read(bytes.NewReader(atomData[42:44]), binary.BigEndian, &altGr)
 				printWithIndent(fmt.Sprintf(
-					"w: %v, h: %v, volume: %v",
+					"w: %v, h: %v, volume: %v, dur: %v, lay: %v, alt gr: %v",
 					fromFixedPoint(uint32(w), 16, 16),
 					fromFixedPoint(uint32(h), 16, 16),
-					fromFixedPoint(uint16(vol), 8, 8)), dopInfoIndent)
+					fromFixedPoint(uint16(vol), 8, 8), dur, layer, altGr), dopInfoIndent)
 				matr, err := readQTMatrix(atomData[48:48+36])
 				if err != nil { fmt.Println("warning: could not read matrix dur to err", err) }
 				printWithIndent(fmt.Sprintf("%v", matr), dopInfoIndent)
@@ -564,6 +567,7 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					printWithIndent(fmt.Sprintf("%v", err), indent)
 					return
 				}
+				printWithIndent(fmt.Sprintf("noe: %v", stsc.NOE), dopInfoIndent)
 				count := len(stsc.Sample2Chunk)
 				if count > 0 {
 					for i := range min(maxListPrint, count) {
