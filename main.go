@@ -1014,7 +1014,7 @@ func writeDemo(file *os.File) error {
 	trakTS := int32(30_000)
 	mdhd, err := GetBytesOf(Mdhd{
 		AtomHeader{0, mdhdNum},
-		FullBox{0, [3]byte{0,0,0}},
+		FullBox{0, [3]byte{0,0,0}}, // MUST BE VERSION=0, see commit: bb3bb75518adc409dc592401897781dbe73b6751
 		0,
 		0,
 		trakTS,
