@@ -946,7 +946,7 @@ func writeDemo(file *os.File) error {
 		0,
 		0,
 		0,
-		durationSec,
+		durationSec * timeScale,
 		[8]byte{},
 		1,
 		0,
@@ -999,7 +999,7 @@ func writeDemo(file *os.File) error {
 	trakTS := int32(30000)
 	mdhd, err := GetBytesOf(Mdhd{
 		AtomHeader{0, mdhdNum},
-		FullBox{1, [3]byte{0,0,0}},
+		FullBox{0, [3]byte{0,0,0}},
 		0,
 		0,
 		trakTS,
@@ -1094,8 +1094,7 @@ func writeDemo(file *os.File) error {
 		AtomHeader{0, sttsNum},
 		FullBox{0, [3]byte{0,0,0}},
 		1,
-		// it gives 1 fps as mentioned, but idk why..
-		[]int32{totalFrames, totalFrames * timeScale * 1000000},
+		[]int32{totalFrames, trakTS / fps},
 	})
 	if err != nil { return err }
 	sttsSize, err := GetBytesOf(uint32(len(stts)))
