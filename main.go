@@ -918,6 +918,24 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 	return b, err
 }
 
+func generateDemoData(h, w, totalFrames int32) ([]byte, int32) {
+	oneFrameSize := w*h*3
+	contentSize  := oneFrameSize * totalFrames
+	res          := make([]byte, contentSize)
+
+	for i := range len(res) {
+		var v byte
+		if i > len(res) / 2 {
+			v = 100
+		} else {
+			v = 200
+		}
+		res[i] = v
+	}
+
+	return res, oneFrameSize
+}
+
 func writeDemo(file *os.File) error {
 	brand := getUintOfFourCCStr("qt  ")
 	ftyp, err := GetBytesOf(Ftyp{AtomHeader{ftypSize, ftypNum}, brand, 512, brand})
@@ -928,24 +946,14 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	file.Write(wide)
 
-	h := 720
-	w := 1280
-	fps := int32(30)
-	totalFrames := int32(60)
-	oneFrameSize := int32(w*h*3)
-	timeScale := int32(1000)
-	durationSec := int32(2)
-	contentSize := oneFrameSize * totalFrames
-	content := make([]byte, contentSize)
-	for i := range len(content) {
-		var v byte
-		if i > len(content) / 2 {
-			v = 100
-		} else {
-			v = 200
-		}
-		content[i] = v
-	}
+	var h   int32 = 720
+	var w   int32 = 1280
+	var fps int32 = 30
+	var durationSec int32 = 5
+	var totalFrames int32 = fps * durationSec
+	var timeScale   int32 = 1000
+
+	content, oneFrameSize := generateDemoData(h, w, totalFrames)
 
 	mdat, err := GetBytesOf(Mdat{AtomHeader{0, mdatNum}, 0, content})
 	if err != nil { return err }
