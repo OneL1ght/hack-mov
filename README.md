@@ -83,3 +83,5 @@ Atom moov |0x6d6f6f76| size: 1929
         Atom �swr |0xa9737772| size: 24
          software generated info: __U_Lavf62.3.100
 ```
+
+![result](assets/result.gif)
