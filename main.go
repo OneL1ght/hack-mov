@@ -919,21 +919,94 @@ func GetBytesOfAtomStruct(val reflect.Value) ([]byte, error) {
 }
 
 func generateDemoData(h, w, totalFrames int32) ([]byte, int32) {
-	oneFrameSize := w*h*3
-	contentSize  := oneFrameSize * totalFrames
+	var ch          int32 = 3
+	var bgColor   [3]byte = [3]byte {0x4F,0x36,0x45} // charcoal
+	var rectColor [3]byte = [3]byte {0,200,0} // red
+
+	frameSize    := w*h*ch
+	contentSize  := frameSize * totalFrames
 	res          := make([]byte, contentSize)
 
-	for i := range len(res) {
-		var v byte
-		if i > len(res) / 2 {
-			v = 100
-		} else {
-			v = 200
-		}
-		res[i] = v
+	type Frame struct {
+		d []byte        // flat data
+		W, H, Ch int32
 	}
 
-	return res, oneFrameSize
+	type Rect struct {
+		X, Y, W, H int32
+	}
+
+	right := func(r Rect) int32 { return int32(float32(r.X) + float32(r.W)/2) }
+	left  := func(r Rect) int32 { return int32(float32(r.X) - float32(r.W)/2) }
+	top   := func(r Rect) int32 { return int32(float32(r.Y) - float32(r.H)/2) }
+	bot   := func(r Rect) int32 { return int32(float32(r.Y) + float32(r.H)/2) }
+
+	createFrame := func(w, h, ch, size int32) Frame {
+		return Frame{
+			W: w, H: h, Ch: ch,
+			d: slices.Repeat(bgColor[:], int(size/3)),
+		}
+	}
+
+	setPx := func(fr *Frame, x, y int32, c [3]byte) {
+		if fr.Ch != 3 { panic("got invalid frame in setPx with 3 channel function!") }
+		if x >= fr.W || x < 0 || y >= fr.H || y < 0 {
+			panic(fmt.Errorf("x or y outside the frame got x: %v, y: %v, frame w: %v, h: %v!",
+				x, y, fr.W, fr.H))
+		}
+
+		pos := int32(y * fr.W * fr.Ch + x * fr.Ch)
+		ml  := int32(len(fr.d))
+		if pos > ml || pos + 2 > ml {
+			panic(fmt.Errorf("out of range for x: %v, y: %v with maxlen: %v, pos: %v", x, y, ml, pos))
+		}
+		for i := range fr.Ch {
+			fr.d[pos+i] = c[i]
+		}
+	}
+
+	drawRect := func(fr *Frame, rect Rect, color [3]byte) {
+		for y := top(rect); y <= bot(rect); y++ {
+			for x := left(rect); x <= right(rect); x++ {
+				setPx(fr, x, y, color)
+			}
+		}
+	}
+
+	fill := func(dst, src []byte, pos int32) {
+		if len(dst) < len(src) { panic("src slice bigger than dst!") }
+		for i := range len(src) {
+			dst[pos+int32(i)] = src[i]
+		}
+	}
+
+	updateRect := func(r *Rect, dx, dy *int32, fr *Frame) {
+		(*r).X = r.X + *dx
+		(*r).Y = r.Y + *dy
+		if right(*r) >= fr.W || left(*r) < 0 {
+			*dx = -*dx
+			halfW := r.W/2 + 1
+			(*r).X = min(max(halfW, r.X), fr.W-halfW)
+		}
+		if bot(*r) >= fr.H || top(*r) < 0 {
+			*dy = -*dy
+			halfH := r.H/2 + 1
+			(*r).Y = min(max(halfH, (*r).Y), fr.H-halfH)
+		}
+	}
+
+	var dx int32 = 20
+	var dy int32 = 20
+	r := Rect{w / 2, h / 2, 50, 50}
+
+	for i := range totalFrames {
+		frame := createFrame(w, h, ch, frameSize)
+		updateRect(&r, &dx, &dy, &frame)
+		drawRect(&frame, r, rectColor)
+		fill(res, frame.d, i * frameSize)
+	}
+
+	return res, frameSize
 }
 
 func writeDemo(file *os.File) error {
@@ -949,7 +1022,7 @@ func writeDemo(file *os.File) error {
 	var h   int32 = 720
 	var w   int32 = 1280
 	var fps int32 = 30
-	var durationSec int32 = 5
+	var durationSec int32 = 10
 	var totalFrames int32 = fps * durationSec
 	var timeScale   int32 = 1000
 
