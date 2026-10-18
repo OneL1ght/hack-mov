@@ -965,19 +965,19 @@ func writeDemo(file *os.File) error {
 	tkhd, err := GetBytesOf(Tkhd{
 		AtomHeader{0, tkhdNum},
 		FullBox{0, [3]byte{0,0,0}},
+		0, // CreationTime
+		0, // ModificationTime
+		1, // TrackID
 		0,
-		0,
-		1,
-		0,
-		durationSec * timeScale,
+		durationSec * timeScale, // Duration
 		[8]byte{},
-		0,
-		0,
-		0,
+		0, // Layer
+		0, // AlternateGroup
+		0, // Volume
 		0,
 		[36]byte{0,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 64,0,0,0}, // as in example
-		int32(int32(w) << 16),
-		int32(int32(h) << 16),
+		int32(int32(w) << 16), // TrackWidth
+		int32(int32(h) << 16), // TrackHeight
 	})
 	if err != nil { return err }
 	tkhdSize, err := GetBytesOf(uint32(len(tkhd)))
@@ -1302,12 +1302,12 @@ func writeDemo(file *os.File) error {
 		Head AtomHeader
 		Mvhd []byte
 		Trak []byte
-		// Udta []byte
+		Udta []byte
 	} {
 		AtomHeader{0, moovNum},
 		mvhd,
 		trak,
-		// udta,
+		udta,
 	})
 	if err != nil { return err }
 	moovSize, err := GetBytesOf(uint32(len(moov)))
