@@ -20,7 +20,7 @@ import (
 	"os"
 )
 
-var parentsAtoms []uint32 = []uint32{moovNum, udtaNum, trakNum, mdiaNum, minfNum, stblNum, dinfNum}
+var parentsAtoms []uint32 = []uint32{moovNum, udtaNum, trakNum, mdiaNum, minfNum, stblNum, dinfNum, metaNum}
 var videoComprNums []uint32 = []uint32{
 	getUintOfFourCCStr("cvid"), //Cinepak
 	getUintOfFourCCStr("jpeg"), //JPEG
@@ -91,6 +91,7 @@ const colrNum uint32 = 0x636f6c72
 const paspNum uint32 = 0x70617370
 const fielNum uint32 = 0x6669656c
 const drefNum uint32 = 0x64726566
+const metaNum uint32 = 0x6d657461
 
 const maxListPrint = 5
 
@@ -554,6 +555,8 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					if count > maxListPrint {
 						printWithIndent(fmt.Sprintf("... and + %v lines", count - maxListPrint), dopInfoIndent)
 					}
+				} else {
+					printWithIndent("no data (table is empyt)", dopInfoIndent)
 				}
 			case stscNum:
 				stsc, err := getStsc(atomData)
@@ -588,6 +591,8 @@ func printAtoms(content []byte, indent int, ainfo bool) {
 					if noe > maxListPrint {
 						printWithIndent(fmt.Sprintf("... and + %v lines", noe - maxListPrint), dopInfoIndent)
 					}
+				} else {
+					printWithIndent("sizes are equal (table is empty)", dopInfoIndent)
 				}
 			case stcoNum:
 				stco, err := getStco(atomData)
@@ -915,8 +920,8 @@ func writeDemo(file *os.File) error {
 
 	h := 720
 	w := 1280
-	fps := int32(1)
-	totalFrames := int32(2)
+	fps := int32(30)
+	totalFrames := int32(60)
 	oneFrameSize := int32(w*h*3)
 	timeScale := int32(1000)
 	durationSec := int32(2)
@@ -948,7 +953,7 @@ func writeDemo(file *os.File) error {
 		0,
 		durationSec * timeScale,
 		[8]byte{},
-		1,
+		0,
 		0,
 		0,
 		0,
@@ -996,7 +1001,7 @@ func writeDemo(file *os.File) error {
 	if err != nil { return err }
 	edts = slices.Replace(edts, 0, 4, edtsSize...)
 
-	trakTS := int32(30000)
+	trakTS := int32(30_000)
 	mdhd, err := GetBytesOf(Mdhd{
 		AtomHeader{0, mdhdNum},
 		FullBox{0, [3]byte{0,0,0}},
@@ -1078,11 +1083,15 @@ func writeDemo(file *os.File) error {
 	stsd = slices.Replace(stsd, 0, 4, stsdSize...)
 
 	firstOffset := int32(len(ftyp) + len(wide) + int(atomHeaderSize))
+	offsets := make([]int32, totalFrames)
+	for i := range len(offsets) {
+		offsets[i] = firstOffset + int32(i) * oneFrameSize
+	}
 	stco, err := GetBytesOf(Stco{
 		AtomHeader{0, stcoNum},
 		FullBox{0, [3]byte{0,0,0}},
 		1,
-		[]int32{firstOffset, firstOffset + oneFrameSize},
+		offsets,
 	})
 	if err != nil { return err }
 	stcoSize, err := GetBytesOf(uint32(len(stco)))
